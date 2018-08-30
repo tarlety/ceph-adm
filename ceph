@@ -33,14 +33,6 @@ case $ACTION in
 		rm secret/.ceph/env
 		$0
 		;;
-	"docker-update")
-		shift
-		HOSTS=$*
-		for HOST in $HOSTS
-		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "rm -rf ~/docker ; mkdir -p ~/docker ; cd ~/docker ; git clone https://github.com/tarlety/docker-workshop"
-		done
-		;;
 	"secret-init")
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws cleanclean ; ./ws mon $HOSTIP $NETWORK ; ./ws clean ; rm -rf ~/.secret/.ceph ; mkdir -p ~/.secret/.ceph ; sudo tar pzcf ~/.secret/.ceph/ceph.secret.tgz ~/store/ceph ; sudo chown ${USER} ~/.secret/.ceph/ceph.secret.tgz"
 		scp -P ${SSHPORT} ${USER}@${HOST}:/home/${USER}/.secret/.ceph/ceph.secret.tgz secret/.ceph
@@ -113,7 +105,6 @@ case $ACTION in
 		;;
 	*)
 		echo $(basename $0) env
-		echo $(basename $0) docker-update host1 host2...
 		echo $(basename $0) secret-init host
 		echo $(basename $0) secret-deploy host1 host2...
 		echo $(basename $0) mon host1 host2...
