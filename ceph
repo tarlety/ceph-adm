@@ -100,9 +100,6 @@ case $ACTION in
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --dport 111,6789,6800:7300 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --sport 111,6789,6800:7300 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
-	"netdata")
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/netdata ; ./ws down ; ./ws up"
-		;;
 	*)
 		echo $(basename $0) env
 		echo $(basename $0) secret-init host
@@ -113,7 +110,6 @@ case $ACTION in
 		echo $(basename $0) mds pgnum host1 host2...
 		echo $(basename $0) network-up host1 host2...
 		echo $(basename $0) network-down host1 host2...
-		echo $(basename $0) netdata host
 		;;
 esac
 
