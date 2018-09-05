@@ -74,13 +74,16 @@ case $ACTION in
 		;;
 	"mds")
 		shift
-		PGNUM=$1
+		ACTIVES=$1
+		ACTIVEMDS=$2
+		PGNUM=$3
 		shift
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mds $PGNUM"
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mdsmount $HOST"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "docker exec mds ceph fs set cephfs max_mds $ACTIVES"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mdsmount $ACTIVEMDS"
 		done
 		;;
 	"network-up")
