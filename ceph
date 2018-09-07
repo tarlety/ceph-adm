@@ -29,16 +29,16 @@ echo ===
 echo
 
 case $ACTION in
-	"env")
-		rm secret/.ceph/env
-		$0
+	"init")
+		rm ${SECRET}/.ceph/env
+		SECRET=${SECRET} $0 -init
 		;;
-	"secret-init")
+	"-init")
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws cleanclean ; ./ws mon $HOSTIP $NETWORK ; ./ws clean ; rm -rf ~/.secret/.ceph ; mkdir -p ~/.secret/.ceph ; sudo tar pzcf ~/.secret/.ceph/ceph.secret.tgz ~/store/ceph ; sudo chown ${USER} ~/.secret/.ceph/ceph.secret.tgz"
 		scp -P ${SSHPORT} ${USER}@${HOST}:/home/${USER}/.secret/.ceph/ceph.secret.tgz secret/.ceph
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "rm -rf ~/.secret/.ceph"
 		;;
-	"secret-deploy")
+	"deploy")
 		shift
 		HOSTS=$*
 		for HOST in $HOSTS
@@ -74,22 +74,20 @@ case $ACTION in
 		;;
 	"mds")
 		shift
-		ACTIVES=$1
-		ACTIVEMDS=$2
-		PGNUM=$3
+		ACTIVEMDS=$1
+		PGNUM=$2
 		shift
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mds $PGNUM"
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "docker exec mds ceph fs set cephfs max_mds $ACTIVES"
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mdsmount $ACTIVEMDS"
 		done
 		;;
 	"network-up")
 		shift
 		HOSTS=$*
-		$0 network-down $HOSTS
+		SECRET=${SECRET} $0 network-down $HOSTS
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --dport 111,6789,6800:7300 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --sport 111,6789,6800:7300 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
@@ -104,9 +102,8 @@ case $ACTION in
 		done
 		;;
 	*)
-		echo $(basename $0) env
-		echo $(basename $0) secret-init host
-		echo $(basename $0) secret-deploy host1 host2...
+		echo $(basename $0) init host
+		echo $(basename $0) deploy host1 host2...
 		echo $(basename $0) mon host1 host2...
 		echo $(basename $0) mgr host1 host2...
 		echo $(basename $0) osds host osd1 osd2...
