@@ -30,10 +30,6 @@ echo
 
 case $ACTION in
 	"init")
-		rm ${SECRET}/.ceph/env
-		SECRET=${SECRET} $0 -init
-		;;
-	"-init")
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws cleanclean ; ./ws mon $HOSTIP $NETWORK ; ./ws clean ; rm -rf ~/.secret/.ceph ; mkdir -p ~/.secret/.ceph ; sudo tar pzcf ~/.secret/.ceph/ceph.secret.tgz ~/store/ceph ; sudo chown ${USER} ~/.secret/.ceph/ceph.secret.tgz"
 		scp -P ${SSHPORT} ${USER}@${HOST}:/home/${USER}/.secret/.ceph/ceph.secret.tgz secret/.ceph
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "rm -rf ~/.secret/.ceph"
