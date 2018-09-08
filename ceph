@@ -31,7 +31,7 @@ echo
 case $ACTION in
 	"init")
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws cleanclean ; ./ws mon $HOSTIP $NETWORK ; ./ws clean ; rm -rf ~/.secret/.ceph ; mkdir -p ~/.secret/.ceph ; sudo tar pzcf ~/.secret/.ceph/ceph.secret.tgz ~/store/ceph ; sudo chown ${USER} ~/.secret/.ceph/ceph.secret.tgz"
-		scp -P ${SSHPORT} ${USER}@${HOST}:/home/${USER}/.secret/.ceph/ceph.secret.tgz secret/.ceph
+		scp -P ${SSHPORT} ${USER}@${HOST}:/home/${USER}/.secret/.ceph/ceph.secret.tgz ${SECRET}/.ceph
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "rm -rf ~/.secret/.ceph"
 		;;
 	"deploy")
@@ -40,7 +40,7 @@ case $ACTION in
 		for HOST in $HOSTS
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "mkdir -p ~/.secret/.ceph"
-			scp -r -P ${SSHPORT} secret/.ceph ${USER}@${HOST}:/home/${USER}/.secret
+			scp -r -P ${SSHPORT} ${SECRET}/.ceph ${USER}@${HOST}:/home/${USER}/.secret
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws cleanclean ; cd / ; sudo tar pzxf ~/.secret/.ceph/ceph.secret.tgz"
 		done
 		;;
