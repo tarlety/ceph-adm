@@ -73,6 +73,7 @@ case $ACTION in
 		ACTIVEMDS=$1
 		PGNUM=$2
 		shift
+		shift
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
