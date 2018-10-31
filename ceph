@@ -87,7 +87,12 @@ case $ACTION in
 		SECRET=${SECRET} $0 network-down $HOSTS
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --dport 111,6789,6800:7300 -j ACCEPT ; sudo iptables -I INPUT -m multiport -p tcp -s \$HOST --sport 111,6789,6800:7300 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			for NODE in $HOSTS
+			do
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'"
+			done
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
 	"network-down")
@@ -95,7 +100,12 @@ case $ACTION in
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "for HOST in $HOSTS ; do sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --dport 111,6789,6800:7300 -j ACCEPT ; sudo iptables -D INPUT -m multiport -p tcp -s \$HOST --sport 111,6789,6800:7300 -j ACCEPT ; done ; sudo iptables-save | sudo tee /etc/iptables/rules.v4"
+			for NODE in $HOSTS
+			do
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT"
+			done
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
 		;;
 	*)
