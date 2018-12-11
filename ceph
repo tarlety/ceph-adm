@@ -81,6 +81,12 @@ case $ACTION in
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mdsmount $ACTIVEMDS"
 		done
 		;;
+	"mdsmount")
+		shift
+		HOST=$1
+		ACTIVEMDS=$2
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mdsmount $ACTIVEMDS"
+		;;
 	"network-up")
 		shift
 		HOSTS=$*
@@ -115,6 +121,7 @@ case $ACTION in
 		echo $(basename $0) mgr host1 host2...
 		echo $(basename $0) osds host osd1 osd2...
 		echo $(basename $0) mds pgnum host1 host2...
+		echo $(basename $0) mdsmount host mds-host...
 		echo $(basename $0) network-up host1 host2...
 		echo $(basename $0) network-down host1 host2...
 		;;
