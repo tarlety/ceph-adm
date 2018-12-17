@@ -23,14 +23,21 @@ USER=$OPERATOR
 if [ "$PORT" == "" ] ; then PORT=${SECRET_SSHPORT} ; fi
 HOSTIP=`eval "cat /etc/hosts | grep ' ${HOST} ' | cut -d ' ' -f 1"`
 
-echo
-echo Ceph, containerized
+echo \# ceph-adm: NETWORK=$NETWORK OPERATOR=$OPERATOR SSHPORT=$SSHPORT ACTION=$ACTION HOST=$HOST
 echo ===
-echo
 
 case $ACTION in
 	"init")
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws cleanclean ; ./ws mon $HOSTIP $NETWORK ; ./ws clean ; rm -rf ~/.secret/.ceph ; mkdir -p ~/.secret/.ceph ; sudo tar pzcf ~/.secret/.ceph/ceph.secret.tgz ~/store/ceph ; sudo chown ${USER} ~/.secret/.ceph/ceph.secret.tgz"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+			cd ~/docker/docker-workshop/services/ceph
+			./ws cleanclean
+			./ws mon $HOSTIP $NETWORK
+			./ws clean
+			rm -rf ~/.secret/.ceph
+			mkdir -p ~/.secret/.ceph
+			sudo tar pzcf ~/.secret/.ceph/ceph.secret.tgz ~/store/ceph
+			sudo chown ${USER} ~/.secret/.ceph/ceph.secret.tgz
+			"
 		scp -P ${SSHPORT} ${USER}@${HOST}:/home/${USER}/.secret/.ceph/ceph.secret.tgz ${SECRET}/.ceph
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "rm -rf ~/.secret/.ceph"
 		;;
@@ -41,7 +48,12 @@ case $ACTION in
 		do
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "mkdir -p ~/.secret/.ceph"
 			scp -r -P ${SSHPORT} ${SECRET}/.ceph ${USER}@${HOST}:/home/${USER}/.secret
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws cleanclean ; cd / ; sudo tar pzxf ~/.secret/.ceph/ceph.secret.tgz"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+				cd ~/docker/docker-workshop/services/ceph
+				./ws cleanclean
+				cd /
+				sudo tar pzxf ~/.secret/.ceph/ceph.secret.tgz
+				"
 		done
 		;;
 	"mon")
@@ -50,7 +62,10 @@ case $ACTION in
 		for HOST in $HOSTS
 		do
 			HOSTIP=`eval "cat /etc/hosts | grep ' ${HOST} ' | cut -d ' ' -f 1"`
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mon $HOSTIP $NETWORK"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+				cd ~/docker/docker-workshop/services/ceph
+				./ws mon $HOSTIP $NETWORK
+				"
 		done
 		;;
 	"mgr")
@@ -58,7 +73,10 @@ case $ACTION in
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mgr"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+				cd ~/docker/docker-workshop/services/ceph
+				./ws mgr
+				"
 		done
 		;;
 	"osds")
@@ -66,7 +84,10 @@ case $ACTION in
 		HOST=$1
 		shift
 		OSDS=$*
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws osds $OSDS"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+			cd ~/docker/docker-workshop/services/ceph
+			./ws osds $OSDS
+			"
 		;;
 	"mds")
 		shift
@@ -77,15 +98,21 @@ case $ACTION in
 		HOSTS=$*
 		for HOST in $HOSTS
 		do
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mds $PGNUM"
-			ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mdsmount $ACTIVEMDS"
+			ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+				cd ~/docker/docker-workshop/services/ceph
+				./ws mds $PGNUM
+				./ws mdsmount $ACTIVEMDS
+				"
 		done
 		;;
 	"mdsmount")
 		shift
 		HOST=$1
 		ACTIVEMDS=$2
-		ssh -t ${USER}@${HOST} -p ${SSHPORT} "cd ~/docker/docker-workshop/services/ceph ; ./ws mdsmount $ACTIVEMDS"
+		ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+			cd ~/docker/docker-workshop/services/ceph
+			./ws mdsmount $ACTIVEMDS
+			"
 		;;
 	"network-up")
 		shift
@@ -95,8 +122,10 @@ case $ACTION in
 		do
 			for NODE in $HOSTS
 			do
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'"
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+					sudo iptables -I INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'
+					sudo iptables -I INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'
+					"
 			done
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
@@ -108,8 +137,10 @@ case $ACTION in
 		do
 			for NODE in $HOSTS
 			do
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT"
-				ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT"
+				ssh -t ${USER}@${HOST} -p ${SSHPORT} "
+					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT
+					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT
+					"
 			done
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
 		done
@@ -127,3 +158,5 @@ case $ACTION in
 		;;
 esac
 
+echo \# ceph-adm: done
+echo ===
