@@ -138,8 +138,8 @@ case $ACTION in
 			for NODE in $HOSTS
 			do
 				ssh -t ${USER}@${HOST} -p ${SSHPORT} "
-					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT
-					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT
+					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --dport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'
+					sudo iptables -D INPUT -m multiport -p tcp -s $NODE --sport 111,6789,6800:7300 -j ACCEPT -m comment --comment 'ceph'
 					"
 			done
 			ssh -t ${USER}@${HOST} -p ${SSHPORT} "sudo iptables-save | sudo tee /etc/iptables/rules.v4"
