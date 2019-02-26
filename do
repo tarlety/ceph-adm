@@ -27,7 +27,7 @@ echo \# ceph-adm: NETWORK=$NETWORK OPERATOR=$OPERATOR SSHPORT=$SSHPORT ACTION=$A
 echo ===
 
 case $ACTION in
-	"init")
+	"initby")
 		ssh -t ${USER}@${HOST} -p ${SSHPORT} "
 			cd ~/docker/docker-workshop/services/ceph
 			./ws cleanclean
@@ -146,7 +146,7 @@ case $ACTION in
 		done
 		;;
 	*)
-		echo $(basename $0) init host
+		echo $(basename $0) initby host
 		echo $(basename $0) deploy host1 host2...
 		echo $(basename $0) mon host1 host2...
 		echo $(basename $0) mgr host1 host2...
