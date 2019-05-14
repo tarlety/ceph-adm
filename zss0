@@ -1,5 +1,4 @@
 #!/bin/bash
-# TODO: NOT READY YET!!
 
 #------------------------------------------------------------------------------
 # Copyright (c) 2019, tarlety@gmail.com
@@ -50,7 +49,7 @@ DEFAULT_NODEADM=../node_adm
 DEFAULT_MONITORS="u1 u2 u3"
 DEFAULT_OSDMAP='( ["u1"]="/dev/sdb" ["u2"]="/dev/sdb" ["u3"]="/dev/sdb" ["u4"]="/dev/sdb" ["u5"]="/dev/sdb" )'
 DEFAULT_MDSNODE="u1"
-DEFAULT_MANAGER="u5"
+DEFAULT_PGNUM="256"
 DEFAULT_GPGKEYNAME=${USERNAME}
 
 CEPH_FILE=${SECRET}/ceph.tgz.enc
@@ -65,7 +64,7 @@ NODEADM=`cat ${CONFIG}/nodeadm 2>/dev/null`
 MONITORS=`cat ${CONFIG}/monitors 2>/dev/null`
 declare -A OSDMAP=`cat ${CONFIG}/osdmap 2>/dev/null`
 MDSNODE=`cat ${CONFIG}/mdsnode 2>/dev/null`
-MANAGER=`cat ${CONFIG}/manager 2>/dev/null`
+PGNUM=`cat ${CONFIG}/pgnum 2>/dev/null`
 GPGKEYNAME=`cat ${CONFIG}/gpgkeyname 2>/dev/null`
 
 #------------------------------------------------------------------------------
@@ -87,7 +86,7 @@ case $1 in
 		echo - MONITORS: ${MONITORS}
 		echo - OSDMAP: "{${!OSDMAP[@]}} -> {${OSDMAP[@]}}"
 		echo - MDSNODE: ${MDSNODE}
-		echo - MANAGER: ${MANAGER}
+		echo - PGNUM: ${PGNUM}
 		echo - GPGKEYNAME: ${GPGKEYNAME} $(gpg -k ${GPGKEYNAME} 2>/dev/null | sed -n '2p' | xargs)
 		echo "## REQUIREMENT:"
 		echo - kubectl: $(which kubectl)
@@ -130,10 +129,10 @@ case $1 in
 				MDSNODE=${1:-${DEFAULT_MDSNODE}}
 				echo ${MDSNODE} > ${CONFIG}/mdsnode
 				;;
-			"manager")
+			"pgnum")
 				shift
-				MANAGER=${1:-${DEFAULT_MANAGER}}
-				echo ${MANAGER} > ${CONFIG}/manager
+				PGNUM=${1:-${DEFAULT_PGNUM}}
+				echo ${PGNUM} > ${CONFIG}/pgnum
 				;;
 			"gpg")
 				shift
@@ -156,8 +155,8 @@ case $1 in
 				echo "			Ex: $(basename $0) config osdmap '${DEFAULT_OSDMAP}'"
 				echo "	mdsnode		the ceph mds node."
 				echo "			Ex: $(basename $0) config mdsnode '${DEFAULT_MDSNODE}'"
-				echo "	manager		the ceph manager node."
-				echo "			Ex: $(basename $0) config manager '${DEFAULT_MANAGER}'"
+				echo "	pgnum		the pgnum of ceph mds pools."
+				echo "			Ex: $(basename $0) config pgnum '${DEFAULT_PGNUM}'"
 				echo "	gpg		configure which gpg key to use."
 				echo "			Ex: $(basename $0) config gpg ${DEFAULT_GPGKEYNAME}"
 				;;
@@ -173,14 +172,13 @@ case $1 in
 
 		cd ${NODEADM}
 			./zss0 exec ${SEEDNODE} "
-				rm -rf docker-apps ;
 				git clone https://github.com/tarlety/docker-apps ;
 				cd ~/docker-apps/storage/ceph ;
 				./ws mon ${SEEDNODEIP} ${NETWORK} ;
 				./ws clean ;
 				"
 			rm -f ${CEPH_FILE}
-			./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph/etc ." | gpg -ear ${GPGKEYNAME} -o ${CEPH_FILE}
+			./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEYNAME} -o ${CEPH_FILE}
 			./zss0 exec ${SEEDNODE} "sudo rm -rf ~/store/ceph"
 		cd -
 
@@ -266,7 +264,7 @@ case $1 in
 	"nodes")
 		shift
 		declare -A NODES
-		for NODE in ${MONITORS} ${MANAGER} ${MDSNODE} ${!OSDMAP[@]}
+		for NODE in ${MONITORS} ${MDSNODE} ${!OSDMAP[@]}
 		do
 			NODES[$NODE]=1
 		done
@@ -281,9 +279,9 @@ case $1 in
 		do
 			./zss0 exec ${NODE} "
 				git clone https://github.com/tarlety/docker-apps ;
-				sudo mkdir -p ~/store/ceph/etc ;
+				sudo mkdir -p ~/store/ceph ;
 				"
-			gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxf - -C ~/store/ceph/etc"
+			gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxf - -C ~/store/ceph"
 		done
 		cd -
 		;;
@@ -312,13 +310,13 @@ case $1 in
 		for NODE in ${NODES}
 		do
 			case ${ONOFF} in
-			"on")
+			"up")
 				NODEIP=$(grep "[\t ]*${NODE}$" /etc/hosts | head -1 | cut -d' ' -f1)
 				./zss0 exec-for-all "
-					sudo ufw allow from ${NODEIP} proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
+					sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
 					"
 				;;
-			"off")
+			"down")
 				RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep ceph-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
 				while [ "${RULENUM}" != "" ]
 				do
@@ -332,39 +330,102 @@ case $1 in
 		done
 		cd -
 		;;
-	"awake")
+	"ceph")
 		shift
-		ROLE=$1
+		COMMANDS=$*
+		cd ${NODEADM}
+		NODES=${MONITORS}
+		for NODE in ${NODES}
+		do
+			./zss0 exec ${NODE} "docker exec mon ceph ${COMMANDS}" && break
+		done
+		cd -
+		;;
+	"mon")
 		shift
 		cd ${NODEADM}
-		case ${ROLE} in
-		"mon")
-			for NODE in ${MONITORS}
+		NODES=${MONITORS}
+		case $1 in
+		"up")
+			for NODE in ${NODES}
 			do
 				NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
-					./ws mon ${NODEIP} ${NETWORK}
+					./ws mon ${NODEIP} ${NETWORK} ;
+					./ws mgr ;
 					"
 			done
 			;;
-		"mgr")
-			for NODE in ${MANAGER}
+		"down")
+			for NODE in ${NODES}
+			do
+				NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					docker exec mon ceph mgr fail ${NODE} ;
+					docker stop mgr ;
+					docker rm mgr ;
+					docker exec mon ceph mon remove ${NODE} ;
+					docker stop mon ;
+					docker rm mon ;
+					"
+			done
+			;;
+		esac
+		cd -
+		;;
+	"mds")
+		shift
+		cd ${NODEADM}
+		NODES=${MDSNODE}
+		case $1 in
+		"up")
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					./ws mds ${PGNUM} ;
+					"
+			done
+			;;
+		"down")
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					./ws mdsclean ;
+					"
+			done
+			;;
+		esac
+		cd -
+		;;
+	"osd")
+		shift
+		cd ${NODEADM}
+		NODES=${!OSDMAP[@]}
+		case $1 in
+		"up")
+			for NODE in ${NODES}
 			do
 				NODEIP=$(grep "[\t ]*${NODE}$" /etc/hosts | cut -d ' ' -f 1)
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
-					./ws mgr
+					./ws zap ${OSDMAP[${NODE}]} ;
+					./ws osds ${OSDMAP[${NODE}]} ;
 					"
 			done
 			;;
-		"osd")
-			for NODE in ${!OSDMAP[@]}
+		"down")
+			for NODE in ${NODES}
 			do
-				NODEIP=$(grep "[\t ]*${NODE}$" /etc/hosts | cut -d ' ' -f 1)
+				OSDDEV=${OSDMAP[${NODE}]}
+				OSDID=
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
-					./ws osds ${OSDMAP[$NODE]} ;
+					./ws osdclean ${OSDMAP[${NODE}]} ${OSDID} ;
+					./ws zap ${OSDMAP[${NODE}]} ;
 					"
 			done
 			;;
@@ -379,8 +440,9 @@ case $1 in
 		echo $(basename $0) "state [list/save/load] [config/secret/data] [state_name, ex: date-stage-env]"
 		echo $(basename $0) "nodes"
 		echo $(basename $0) "[preflight/clean] [nodes]"
-		echo $(basename $0) "network [on/off/status] [nodes]"
-		echo $(basename $0) "awake [mon/osd/mgr/mds]"
+		echo $(basename $0) "network [up/down/status] [nodes]"
+		echo $(basename $0) "ceph ..."
+		echo $(basename $0) "[mon/osd/mds] [up/down]"
 		;;
 esac
 
