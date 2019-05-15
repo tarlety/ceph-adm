@@ -359,38 +359,71 @@ case $1 in
 		cd - &> /dev/null
 		;;
 	"mon")
+		# https://access.redhat.com/documentation/en-us/red_hat_ceph_storage/1.2.3/html/red_hat_ceph_administration_guide/remove_a_monitor
+		# http://docs.ceph.com/docs/mimic/mgr/administrator/
 		shift
-		cd ${NODEADM}
-		NODES=${MONITORS}
+		NODES=${2:-${MONITORS}}
 		case $1 in
 		"up")
 			for NODE in ${NODES}
 			do
 				NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
+				cd ${NODEADM}
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
 					./ws mon ${NODEIP} ${NETWORK} ;
 					./ws mgr ;
 					"
+				cd - &> /dev/null
 			done
 			;;
 		"down")
 			for NODE in ${NODES}
 			do
 				NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
+				./zss0 ceph mgr fail ${NODE}
+				./zss0 ceph mon remove ${NODE}
+				cd ${NODEADM}
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
-					docker exec mon ceph mgr fail ${NODE} ;
-					docker stop mgr ;
-					docker rm mgr ;
-					docker exec mon ceph mon remove ${NODE} ;
-					docker stop mon ;
-					docker rm mon ;
+					docker stop mgr ; docker rm mgr ;
+					docker stop mon ; docker rm mon ;
 					"
+				cd - &> /dev/null
 			done
 			;;
 		esac
-		cd - &> /dev/null
+		;;
+	"osd")
+		# http://docs.ceph.com/docs/mimic/rados/operations/add-or-rm-osds/
+		shift
+		NODES=${2:-${!OSDMAP[@]}}
+		case $1 in
+		"up")
+			for NODE in ${NODES}
+			do
+				cd ${NODEADM}
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					./ws zap ${OSDMAP[${NODE}]} ;
+					./ws osds ${OSDMAP[${NODE}]} ;
+					"
+				cd - &> /dev/null
+			done
+			;;
+		"down")
+			for NODE in ${NODES}
+			do
+				OSDDEV=${OSDMAP[${NODE}]}
+				cd ${NODEADM}
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					./ws osdclean ${OSDMAP[${NODE}]} ;
+					"
+				cd - &> /dev/null
+			done
+			;;
+		esac
 		;;
 	"mds")
 		shift
@@ -412,36 +445,6 @@ case $1 in
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
 					./ws mdsclean ;
-					"
-			done
-			;;
-		esac
-		cd - &> /dev/null
-		;;
-	"osd")
-		shift
-		cd ${NODEADM}
-		NODES=${!OSDMAP[@]}
-		case $1 in
-		"up")
-			for NODE in ${NODES}
-			do
-				NODEIP=$(grep "[\t ]*${NODE}$" /etc/hosts | cut -d ' ' -f 1)
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws zap ${OSDMAP[${NODE}]} ;
-					./ws osds ${OSDMAP[${NODE}]} ;
-					"
-			done
-			;;
-		"down")
-			for NODE in ${NODES}
-			do
-				OSDDEV=${OSDMAP[${NODE}]}
-				OSDID=
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws osdclean ${OSDMAP[${NODE}]} ${OSDID} ;
 					"
 			done
 			;;
@@ -471,7 +474,7 @@ case $1 in
 		echo $(basename $0) "[nodes/activemds]"
 		echo $(basename $0) "[preflight/clean] [nodes]"
 		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[mon/osd/mds] [up/down]"
+		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes]"
 		echo $(basename $0) "mdsmount"
 		echo $(basename $0) "ceph ..."
 		;;
