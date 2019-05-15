@@ -339,6 +339,10 @@ case $1 in
 				;;
 			"status")
 				./zss0 exec ${NODE} "sudo ufw status numbered | grep 'ceph-adm'"
+				;;
+			*)
+				$0 ; exit 1
+				;;
 			esac
 		done
 		cd - &> /dev/null
@@ -388,6 +392,9 @@ case $1 in
 				cd - &> /dev/null
 			done
 			;;
+		*)
+			$0 ; exit 1
+			;;
 		esac
 		;;
 	"osd")
@@ -419,6 +426,9 @@ case $1 in
 				cd - &> /dev/null
 			done
 			;;
+		*)
+			$0 ; exit 1
+			;;
 		esac
 		;;
 	"mds")
@@ -443,6 +453,9 @@ case $1 in
 					./ws mdsclean ;
 					"
 			done
+			;;
+		*)
+			$0 ; exit 1
 			;;
 		esac
 		cd - &> /dev/null
