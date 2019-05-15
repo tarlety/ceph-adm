@@ -89,6 +89,7 @@ case $1 in
 		echo - PGNUM: ${PGNUM}
 		echo - GPGKEYNAME: ${GPGKEYNAME} $(gpg -k ${GPGKEYNAME} 2>/dev/null | sed -n '2p' | xargs)
 		echo "## REQUIREMENT:"
+		echo - node-adm: $(${NODEADM}/zss0 version)
 		echo - kubectl: $(which kubectl)
 		echo - gpg: $(which gpg)
 		echo - tar: $(which tar)
@@ -171,16 +172,27 @@ case $1 in
 		SEEDNODEIP=$(cat /etc/hosts | grep "[\t ]*${SEEDNODE}$" | cut -d' ' -f1)
 
 		cd ${NODEADM}
-			./zss0 exec ${SEEDNODE} "
-				git clone https://github.com/tarlety/docker-apps ;
-				cd ~/docker-apps/storage/ceph ;
-				./ws mon ${SEEDNODEIP} ${NETWORK} ;
-				./ws clean ;
-				"
-			rm -f ${CEPH_FILE}
-			./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEYNAME} -o ${CEPH_FILE}
-			./zss0 exec ${SEEDNODE} "sudo rm -rf ~/store/ceph"
-		cd -
+		./zss0 exec ${SEEDNODE} "
+			git clone https://github.com/tarlety/docker-apps ;
+			cd ~/docker-apps/storage/ceph ;
+			./ws mon ${SEEDNODEIP} ${NETWORK} ;
+			"
+		for ROLE in osd mds rbd rgw
+		do
+			while ./zss0 exec ${SEEDNODE} "[ ! -f ~/store/ceph/var/lib/ceph/bootstrap-${ROLE}/ceph.keyring ]"
+			do
+				echo Waiting bootstrap-${ROLE}/ceph.keyring...
+				sleep 1
+			done
+		done
+		./zss0 exec ${SEEDNODE} "
+			cd ~/docker-apps/storage/ceph ;
+			./ws clean ;
+			"
+		rm -f ${CEPH_FILE}
+		./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEYNAME} -o ${CEPH_FILE}
+		./zss0 exec ${SEEDNODE} "sudo rm -rf ~/store/ceph"
+		cd - &> /dev/null
 
 		gpg --gen-random --armor 2 16 | base64 | cut -c1-16 > ${SALT}
 		;;
@@ -270,6 +282,9 @@ case $1 in
 		done
 		echo ${!NODES[@]}
 		;;
+	"activemds")
+		echo $(./zss0 env | grep MONITORS | cut -d: -f2) | sed 's/ /,/g'
+		;;
 	"preflight")
 		shift
 		NODES=${*:-$($0 nodes)}
@@ -283,10 +298,12 @@ case $1 in
 				"
 			gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxf - -C ~/store/ceph"
 		done
-		cd -
+		cd - &> /dev/null
 		;;
 	"clean")
 		shift
+		$0 mds down
+		$0 osd down
 		NODES=${*:-$($0 nodes)}
 		echo ${NODES} clean...
 		cd ${NODEADM}
@@ -298,7 +315,7 @@ case $1 in
 				sudo rm -rf ~/store/ceph ;
 				"
 		done
-		cd -
+		cd - &> /dev/null
 		;;
 	"network")
 		shift
@@ -328,7 +345,7 @@ case $1 in
 				./zss0 exec ${NODE} "sudo ufw status numbered | grep 'ceph-adm'"
 			esac
 		done
-		cd -
+		cd - &> /dev/null
 		;;
 	"ceph")
 		shift
@@ -339,7 +356,7 @@ case $1 in
 		do
 			./zss0 exec ${NODE} "docker exec mon ceph ${COMMANDS}" && break
 		done
-		cd -
+		cd - &> /dev/null
 		;;
 	"mon")
 		shift
@@ -373,7 +390,7 @@ case $1 in
 			done
 			;;
 		esac
-		cd -
+		cd - &> /dev/null
 		;;
 	"mds")
 		shift
@@ -399,7 +416,7 @@ case $1 in
 			done
 			;;
 		esac
-		cd -
+		cd - &> /dev/null
 		;;
 	"osd")
 		shift
@@ -425,12 +442,25 @@ case $1 in
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
 					./ws osdclean ${OSDMAP[${NODE}]} ${OSDID} ;
-					./ws zap ${OSDMAP[${NODE}]} ;
 					"
 			done
 			;;
 		esac
-		cd -
+		cd - &> /dev/null
+		;;
+	"mdsmount")
+		shift
+		ACTIVEMDS=$($0 activemds)
+		cd ${NODEADM}
+		NODES=${!OSDMAP[@]}
+		for NODE in ${NODES}
+		do
+			./zss0 exec ${NODE} "
+				cd ~/docker-apps/storage/ceph ;
+				./ws mdsmount ${ACTIVEMDS} ;
+				"
+		done
+		cd - &> /dev/null
 		;;
 	*)
 		echo $(basename $0) version
@@ -438,11 +468,12 @@ case $1 in
 		echo $(basename $0) config ...
 		echo $(basename $0) secret-create
 		echo $(basename $0) "state [list/save/load] [config/secret/data] [state_name, ex: date-stage-env]"
-		echo $(basename $0) "nodes"
+		echo $(basename $0) "[nodes/activemds]"
 		echo $(basename $0) "[preflight/clean] [nodes]"
 		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "[mon/osd/mds] [up/down]"
+		echo $(basename $0) "mdsmount"
+		echo $(basename $0) "ceph ..."
 		;;
 esac
 
