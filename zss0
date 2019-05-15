@@ -173,7 +173,6 @@ case $1 in
 
 		cd ${NODEADM}
 		./zss0 exec ${SEEDNODE} "
-			git clone https://github.com/tarlety/docker-apps ;
 			cd ~/docker-apps/storage/ceph ;
 			./ws mon ${SEEDNODEIP} ${NETWORK} ;
 			"
@@ -292,10 +291,7 @@ case $1 in
 		cd ${NODEADM}
 		for NODE in ${NODES}
 		do
-			./zss0 exec ${NODE} "
-				git clone https://github.com/tarlety/docker-apps ;
-				sudo mkdir -p ~/store/ceph ;
-				"
+			./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
 			gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxf - -C ~/store/ceph"
 		done
 		cd - &> /dev/null
