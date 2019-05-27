@@ -347,17 +347,6 @@ case $1 in
 		done
 		cd - &> /dev/null
 		;;
-	"ceph")
-		shift
-		COMMANDS=$*
-		cd ${NODEADM}
-		NODES=${MONITORS}
-		for NODE in ${NODES}
-		do
-			./zss0 exec ${NODE} "docker exec mon ceph ${COMMANDS}" && break
-		done
-		cd - &> /dev/null
-		;;
 	"mon")
 		# https://access.redhat.com/documentation/en-us/red_hat_ceph_storage/1.2.3/html/red_hat_ceph_administration_guide/remove_a_monitor
 		# http://docs.ceph.com/docs/mimic/mgr/administrator/
@@ -474,6 +463,43 @@ case $1 in
 		done
 		cd - &> /dev/null
 		;;
+	"ceph")
+		shift
+		COMMANDS=$*
+		cd ${NODEADM}
+		NODES=${MONITORS}
+		for NODE in ${NODES}
+		do
+			./zss0 exec ${NODE} "docker exec mon ceph ${COMMANDS}" && break
+		done
+		cd - &> /dev/null
+		;;
+	"kube-secret")
+		shift
+		NAMESPACE=${2:-default}
+		case $1 in
+		"up")
+			kubectl get secret -n ${NAMESPACE} | grep ceph-secret
+			if [ $? -eq 1 ]
+			then
+				KEY=$(echo $(gpg -d ${CEPH_FILE} | tar zxf - ./var/lib/ceph/bootstrap-mds/ceph.keyring  -O | grep key | cut -d= -f2-))
+				cat <<EOF | kubectl create -f -
+apiVersion: v1
+data:
+  key: $($KEY | base64)
+kind: Secret
+metadata:
+  name: ceph-secret
+  namespace: $NAMESPACE
+type: Opaque
+EOF
+fi
+			;;
+		"down")
+			kubectl delete secret ceph-secret -n ${NAMESPACE}
+			;;
+		esac
+		;;
 	*)
 		echo $(basename $0) version
 		echo $(basename $0) env
@@ -486,6 +512,7 @@ case $1 in
 		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes]"
 		echo $(basename $0) "mdsmount"
 		echo $(basename $0) "ceph ..."
+		echo $(basename $0) "kube-secret [up/down] [namespace]"
 		;;
 esac
 
