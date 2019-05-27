@@ -482,15 +482,15 @@ case $1 in
 			kubectl get secret -n ${NAMESPACE} | grep ceph-secret
 			if [ $? -eq 1 ]
 			then
-				KEY=$(echo $(gpg -d ${CEPH_FILE} | tar zxf - ./var/lib/ceph/bootstrap-mds/ceph.keyring  -O | grep key | cut -d= -f2-))
+				KEY=$(gpg -d ${CEPH_FILE} | tar zxf - ./var/lib/ceph/bootstrap-mds/ceph.keyring -O | grep key | cut -d= -f2-)
 				cat <<EOF | kubectl create -f -
 apiVersion: v1
 data:
-  key: $($KEY | base64)
+  key: $(echo ${KEY} | base64)
 kind: Secret
 metadata:
   name: ceph-secret
-  namespace: $NAMESPACE
+  namespace: ${NAMESPACE}
 type: Opaque
 EOF
 fi
