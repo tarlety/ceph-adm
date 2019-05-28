@@ -1,0 +1,317 @@
+#!/bin/bash
+
+# zss interface
+
+case $1 in
+	"app")
+		PROJECTNAME=zerus
+		APPNAME=ceph-adm
+		APPVERSION=0.1.0
+		;;
+	"config")
+		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
+		declare -A CONFIG_DESCRIPTIONS
+		CONFIG_DESCRIPTIONS=( \
+			["network"]="network of all ceph nodes." \
+			["nodeadm"]="to provide the control to all nodes." \
+			["monitors"]="the ceph monitor nodes." \
+			["osdmap"]="to provide the control to all nodes." \
+			["mdsnode"]="the ceph mds node." \
+			["pgnum"]="the pgnum of ceph mds pools." \
+			)
+
+		DEFAULT_NETWORK=10.13.13.0/24
+		DEFAULT_NODEADM=../node_adm
+		DEFAULT_MONITORS="u1 u2 u3"
+		DEFAULT_OSDMAP='( ["u1"]="/dev/sdb" ["u2"]="/dev/sdb" ["u3"]="/dev/sdb" ["u4"]="/dev/sdb" ["u5"]="/dev/sdb" )'
+		DEFAULT_MDSNODE="u1"
+		DEFAULT_PGNUM="256"
+
+		declare -A OSDMAP
+		;;
+	"vars")
+		CEPH_FILE=${SECRET}/ceph.tgz.enc
+		;;
+	"requirement")
+		echo - node-adm: $(${NODEADM}/zss0 version)
+		echo - kubectl: $(which kubectl)
+		;;
+	"secret-create")
+		SEEDNODE=$(echo ${MONITORS} | cut -d' ' -f1)
+		SEEDNODEIP=$(cat /etc/hosts | grep "[\t ]*${SEEDNODE}$" | cut -d' ' -f1)
+
+		cd ${NODEADM}
+		./zss0 exec ${SEEDNODE} "
+			cd ~/docker-apps/storage/ceph ;
+			./ws mon ${SEEDNODEIP} ${NETWORK} ;
+			"
+		for ROLE in osd mds rbd rgw
+		do
+			while ./zss0 exec ${SEEDNODE} "[ ! -f ~/store/ceph/var/lib/ceph/bootstrap-${ROLE}/ceph.keyring ]"
+			do
+				echo Waiting bootstrap-${ROLE}/ceph.keyring...
+				sleep 1
+			done
+		done
+		./zss0 exec ${SEEDNODE} "
+			cd ~/docker-apps/storage/ceph ;
+			./ws clean ;
+			"
+		rm -f ${CEPH_FILE}
+		./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEYNAME} -o ${CEPH_FILE}
+		./zss0 exec ${SEEDNODE} "sudo rm -rf ~/store/ceph"
+		cd - &> /dev/null
+		;;
+	"state-data-save")
+		;;
+	"state-secret-load-post")
+		;;
+	"state-data-load")
+		;;
+	# AppImplementing Section: commands
+	#------------------------------------------------------------------------------
+	"command")
+		shift
+		case $1 in
+		"nodes")
+			shift
+			declare -A NODES
+			for NODE in ${MONITORS} ${MDSNODE} ${!OSDMAP[@]}
+			do
+				NODES[$NODE]=1
+			done
+			echo ${!NODES[@]}
+			;;
+		"activemds")
+			echo $(./zss0 env | grep MONITORS | cut -d: -f2) | sed 's/ /,/g'
+			;;
+		"preflight")
+			shift
+			NODES=${*:-$($0 nodes)}
+			echo ${NODES} preflight...
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
+				gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxf - -C ~/store/ceph"
+			done
+			cd - &> /dev/null
+			;;
+		"clean")
+			shift
+			$0 mds down
+			$0 osd down
+			NODES=${*:-$($0 nodes)}
+			echo ${NODES} clean...
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					./ws clean ;
+					sudo rm -rf ~/store/ceph ;
+					"
+			done
+			cd - &> /dev/null
+			;;
+		"network")
+			shift
+			ONOFF=$1
+			shift
+			NODES=${*:-$($0 nodes)}
+
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				case ${ONOFF} in
+				"up")
+					NODEIP=$(grep "[\t ]*${NODE}$" /etc/hosts | head -1 | cut -d' ' -f1)
+					./zss0 exec-for-all "
+						sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
+						"
+					;;
+				"down")
+					RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep ceph-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
+					while [ "${RULENUM}" != "" ]
+					do
+						echo y | ./zss0 exec ${NODE} "sudo ufw delete ${RULENUM}"
+						RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep ceph-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
+					done
+					;;
+				"status")
+					./zss0 exec ${NODE} "sudo ufw status numbered | grep 'ceph-adm'"
+					;;
+				*)
+					$0 ; exit 1
+					;;
+				esac
+			done
+			cd - &> /dev/null
+			;;
+		"mon")
+			# https://access.redhat.com/documentation/en-us/red_hat_ceph_storage/1.2.3/html/red_hat_ceph_administration_guide/remove_a_monitor
+			# http://docs.ceph.com/docs/mimic/mgr/administrator/
+			shift
+			NODES=${2:-${MONITORS}}
+			case $1 in
+			"up")
+				for NODE in ${NODES}
+				do
+					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
+					cd ${NODEADM}
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						./ws mon ${NODEIP} ${NETWORK} ;
+						./ws mgr ;
+						"
+					cd - &> /dev/null
+				done
+				;;
+			"down")
+				for NODE in ${NODES}
+				do
+					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
+					./zss0 ceph mgr fail ${NODE}
+					./zss0 ceph mon remove ${NODE}
+					cd ${NODEADM}
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						docker stop mgr ; docker rm mgr ;
+						docker stop mon ; docker rm mon ;
+						"
+					cd - &> /dev/null
+				done
+				;;
+			*)
+				$0 ; exit 1
+				;;
+			esac
+			;;
+		"osd")
+			# http://docs.ceph.com/docs/mimic/rados/operations/add-or-rm-osds/
+			shift
+			NODES=${2:-${!OSDMAP[@]}}
+			case $1 in
+			"up")
+				for NODE in ${NODES}
+				do
+					cd ${NODEADM}
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						./ws zap ${OSDMAP[${NODE}]} ;
+						./ws osds ${OSDMAP[${NODE}]} ;
+						"
+					cd - &> /dev/null
+				done
+				;;
+			"down")
+				for NODE in ${NODES}
+				do
+					OSDDEV=${OSDMAP[${NODE}]}
+					cd ${NODEADM}
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						./ws osdclean ${OSDMAP[${NODE}]} ;
+						"
+					cd - &> /dev/null
+				done
+				;;
+			*)
+				$0 ; exit 1
+				;;
+			esac
+			;;
+		"mds")
+			shift
+			cd ${NODEADM}
+			NODES=${MDSNODE}
+			case $1 in
+			"up")
+				for NODE in ${NODES}
+				do
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						./ws mds ${PGNUM} ;
+						"
+				done
+				;;
+			"down")
+				for NODE in ${NODES}
+				do
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						./ws mdsclean ;
+						"
+				done
+				;;
+			*)
+				$0 ; exit 1
+				;;
+			esac
+			cd - &> /dev/null
+			;;
+		"mdsmount")
+			shift
+			ACTIVEMDS=$($0 activemds)
+			cd ${NODEADM}
+			NODES=${!OSDMAP[@]}
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					./ws mdsmount ${ACTIVEMDS} ;
+					"
+			done
+			cd - &> /dev/null
+			;;
+		"ceph")
+			shift
+			COMMANDS=$*
+			cd ${NODEADM}
+			NODES=${MONITORS}
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "docker exec mon ceph ${COMMANDS}" && break
+			done
+			cd - &> /dev/null
+			;;
+		"kube-secret")
+			shift
+			NAMESPACE=${2:-default}
+			case $1 in
+			"up")
+				kubectl get secret -n ${NAMESPACE} | grep ceph-secret
+				if [ $? -eq 1 ]
+				then
+					KEY=$(gpg -d ${CEPH_FILE} | tar zxf - ./etc/ceph/ceph.client.admin.keyring -O | grep key | cut -d= -f2-)
+					cat <<EOF | kubectl create -f -
+apiVersion: v1
+data:
+  key: $(echo ${KEY} | base64)
+kind: Secret
+metadata:
+  name: ceph-secret
+  namespace: ${NAMESPACE}
+type: Opaque
+EOF
+				fi
+				;;
+			"down")
+				kubectl delete secret ceph-secret -n ${NAMESPACE}
+				;;
+			esac
+			;;
+		esac
+		;;
+	#------------------------------------------------------------------------------
+	"usage")
+		echo $(basename $0) "[nodes/activemds]"
+		echo $(basename $0) "[preflight/clean] [nodes]"
+		echo $(basename $0) "network [up/down/status] [nodes]"
+		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes]"
+		echo $(basename $0) "mdsmount"
+		echo $(basename $0) "ceph ..."
+		echo $(basename $0) "kube-secret [up/down] [namespace]"
+		;;
+esac
+

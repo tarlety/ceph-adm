@@ -1,18 +1,19 @@
 #!/bin/bash
 
-#------------------------------------------------------------------------------
+# 0.6.0 backlogs
+#   - derived: ceph-adm, kube-adm, zerus-test
+
+#==============================================================================
 # Copyright (c) 2019, tarlety@gmail.com
 #
-# Zerus Scripting Standard v0.4.0
+# Zerus Scripting Standard v0.5.6
 #
 # This standard defines script state management framework.
 # Following this framework, you can manage app states in a consistent way.
 #
 # Environments:
 #
-#    SECRET	Where to keep secrets.
-#    CONFIG	Where to keep configurations.
-#    STORE	Where to keep persistent data.
+#    ZSS_STORE	The store location to keep config/secret/state/data.
 #
 # Commands:
 #
@@ -24,73 +25,119 @@
 #                       The state can be saved or loaded.
 #                       Default state type is all states and default action is "list".
 #
+# Store Structure:
+#
+#   - store/projectname/appname/config
+#   - store/projectname/appname/secret
+#     - *.env
+#   - store/projectname/appname/data
+#     - (container volume)
+#   - store/projectname/appname/state
+#     - *-config.tgz
+#     - *-secret.tgz.enc
+#     - *-data.tgz.enc
+#   - store/projectname/appname/others...
+#
+# ZSS framework and AppImplementing interface (zss0.impl)
+#
+#    - app
+#    - config
+#    - vars
+#    - requirment
+#    - secret-create
+#    - state-data-save
+#    - state-secret-load-post
+#    - state-data-load
+#    - command
+#    - usage
+#
 # Scnario:
 #
-#    1. First, use "<scirptname> env" to confirm the state is clean.
-#    2. Then, use "<scriptname> config" to know how many configurations you have to set.
-#    3. Then, use "<scriptname> secret-create" to create secret files.
-#    4. Then, use "<scriptname> env" again to confirm the state is what you want.
+#    1. First, use "<app> env" to check current configurations.
+#    2. Then, use "<app> config" to set proper configurations based on runtime environments.
+#    3. Then, use "<app> secret-create" to create secret based on authentications.
+#    4. Then, use "<app> state" to save config and secret.
+#
+# Changelog:
+#
+#    v0.5.3:
+#       - introducing zss0.impl
+#
+#    v0.5.0:
+#       - new designed Store Structure
+#       - framework integrated: app-related sections are bounded by AppImplementing
+#       - certificate as secret files shall be encrypted
 
-#------------------------------------------------------------------------------
+#==============================================================================
 # Environments:
 
-VERSION=0.4.2
-SCRIPTNAME=ceph-adm
-APPNAME=ceph-adm
-SECRET=${SECRET:-"${PWD}/.secret/${SCRIPTNAME}"}
-CONFIG=${CONFIG:-"${PWD}/.config/${SCRIPTNAME}"}
+ZSSVERSION=0.5.6
+# AppImplementing Section: app
+#------------------------------------------------------------------------------
+source ./zss0.impl app
+#------------------------------------------------------------------------------
+STORE=${ZSS_STORE:-"${HOME}/store"}/${PROJECTNAME}/${APPNAME}
+SECRET=${SECRET:-"${STORE}/secret"}
+CONFIG=${CONFIG:-"${STORE}/config"}
+DATA=${DATA:-"${STORE}/data"}
+STATE=${STATE:-"${STORE}/state"}
 
-DEFAULT_STORE=${STORE:-"${PWD}/.store/${SCRIPTNAME}"}
-DEFAULT_BASE_CONFIG=nop
-DEFAULT_BASE_SECRET=nop
-DEFAULT_BASE_DATA=nop
-DEFAULT_NETWORK=10.13.13.0/24
-DEFAULT_NODEADM=../node_adm
-DEFAULT_MONITORS="u1 u2 u3"
-DEFAULT_OSDMAP='( ["u1"]="/dev/sdb" ["u2"]="/dev/sdb" ["u3"]="/dev/sdb" ["u4"]="/dev/sdb" ["u5"]="/dev/sdb" )'
-DEFAULT_MDSNODE="u1"
-DEFAULT_PGNUM="256"
-DEFAULT_GPGKEYNAME=${USERNAME}
-
-CEPH_FILE=${SECRET}/ceph.tgz.enc
-SALT=${SECRET}/salt
-
-STORE=`cat ${CONFIG}/store 2>/dev/null`
 BASE_CONFIG=`cat ${CONFIG}/base_config 2>/dev/null`
 BASE_SECRET=`cat ${CONFIG}/base_secret 2>/dev/null`
 BASE_DATA=`cat ${CONFIG}/base_data 2>/dev/null`
-NETWORK=`cat ${CONFIG}/network 2>/dev/null`
-NODEADM=`cat ${CONFIG}/nodeadm 2>/dev/null`
-MONITORS=`cat ${CONFIG}/monitors 2>/dev/null`
-declare -A OSDMAP=`cat ${CONFIG}/osdmap 2>/dev/null`
-MDSNODE=`cat ${CONFIG}/mdsnode 2>/dev/null`
-PGNUM=`cat ${CONFIG}/pgnum 2>/dev/null`
-GPGKEYNAME=`cat ${CONFIG}/gpgkeyname 2>/dev/null`
+SALT=${SECRET}/salt
 
+DEFAULT_GPGKEY=${USERNAME}
+
+# AppImplementing Section: configs
 #------------------------------------------------------------------------------
+source ./zss0.impl config
+#------------------------------------------------------------------------------
+
+for KEY in ${CONFIGKEYS}
+do
+	VARNAME=$(echo ${KEY} | tr '[:lower:]' '[:upper:]')
+	eval declare -A ${VARNAME}=$(cat ${CONFIG}/${KEY} 2>/dev/null)
+done
+
+GPGKEY=`cat ${CONFIG}/gpgkey 2>/dev/null`
+
+eval export $(echo ${CONFIGKEYS} | tr '[:lower:]' '[:upper:]')
+
+# AppImplementing Section: vars
+#------------------------------------------------------------------------------
+source ./zss0.impl vars
+#------------------------------------------------------------------------------
+
+#==============================================================================
 # Commands
 
 case $1 in
 	"version")
-		echo ${VERSION}
+		echo ${ZSSVERSION} ${APPVERSION}
 		;;
 	"env")
 		echo =========================================================================
-		echo "## SCRIPT NAME: ${SCRIPTNAME}"
-		echo - VERSION: ${VERSION}
+		echo "## NAME: ${PROJECTNAME}/${APPNAME}"
+		echo - ZSSVERSION: ${ZSSVERSION}
+		echo - APPVERSION: ${APPVERSION}
 		echo - STORE: ${STORE}
-		echo - SECRET: $SECRET $(echo $(cat $SALT 2>/dev/null) $(cat ${SECRET}/* | sha256sum 2>/dev/null) | sha1sum | cut -c1-8)
-		echo - CONFIG: ${CONFIG}
-		echo - NETWORK: ${NETWORK}
-		echo - NODEADM: ${NODEADM}
-		echo - MONITORS: ${MONITORS}
-		echo - OSDMAP: "{${!OSDMAP[@]}} -> {${OSDMAP[@]}}"
-		echo - MDSNODE: ${MDSNODE}
-		echo - PGNUM: ${PGNUM}
-		echo - GPGKEYNAME: ${GPGKEYNAME} $(gpg -k ${GPGKEYNAME} 2>/dev/null | sed -n '2p' | xargs)
+		echo - SECRET: $(echo $(cat $SALT 2>/dev/null) $(cat ${SECRET}/* | sha256sum 2>/dev/null) | sha1sum | cut -c1-8)
+		for KEY in ${CONFIGKEYS}
+		do
+			KEY=$(echo ${KEY} | tr '[:lower:]' '[:upper:]')
+			if [ "$(eval echo \${!${KEY}[@]})" == "0" ]; then
+				eval echo - ${KEY}: \${${KEY}}
+			else
+				eval echo - ${KEY}: "{\${!${KEY}[@]}} -\> {\${${KEY}[@]}}"
+			fi
+		done
+		echo - GPGKEY: ${GPGKEY} $(gpg -k ${GPGKEY} 2>/dev/null | sed -n '2p' | xargs)
 		echo "## REQUIREMENT:"
-		echo - node-adm: $(${NODEADM}/zss0 version)
-		echo - kubectl: $(which kubectl)
+		# AppImplementing Section: requirement
+		#------------------------------------------------------------------------------
+		source ./zss0.impl requirement
+		#------------------------------------------------------------------------------
 		echo - gpg: $(which gpg)
 		echo - tar: $(which tar)
 		echo - colordiff: $(which colordiff)
@@ -100,66 +147,32 @@ case $1 in
 		shift
 		mkdir -p ${CONFIG}
 		case $1 in
-			"store")
+			"gpgkey")
 				shift
-				STORE=${1:-${DEFAULT_STORE}}
-				echo ${STORE} > ${CONFIG}/store
+				GPGKEY=${1:-${DEFAULT_GPGKEY}}
+				echo ${GPGKEY} >  ${CONFIG}/gpgkey
 				;;
-			"network")
-				shift
-				NETWORK=${1:-${DEFAULT_NETWORK}}
-				echo ${NETWORK} > ${CONFIG}/network
-				;;
-			"nodeadm")
-				shift
-				NODEADM=${1:-${DEFAULT_NODEADM}}
-				echo ${NODEADM} > ${CONFIG}/nodeadm
-				;;
-			"monitors")
-				shift
-				MONITORS=${1:-${DEFAULT_MONITORS}}
-				echo ${MONITORS} > ${CONFIG}/monitors
-				;;
-			"osdmap")
-				shift
-				OSDMAP=${1:-${DEFAULT_OSDMAP}}
-				echo ${OSDMAP} > ${CONFIG}/osdmap
-				;;
-			"mdsnode")
-				shift
-				MDSNODE=${1:-${DEFAULT_MDSNODE}}
-				echo ${MDSNODE} > ${CONFIG}/mdsnode
-				;;
-			"pgnum")
-				shift
-				PGNUM=${1:-${DEFAULT_PGNUM}}
-				echo ${PGNUM} > ${CONFIG}/pgnum
-				;;
-			"gpg")
-				shift
-				GPGKEYNAME=${1:-${DEFAULT_GPGKEYNAME}}
-				echo ${GPGKEYNAME} >  ${CONFIG}/gpgkeyname
+			""|"help")
+				echo "Usage: $(basename $0) config <key> <value>"
+				echo ""
+				echo "Config keys:"
+				echo ""
+				for KEY in ${CONFIGKEYS}
+				do
+					VALUE_VAR=$(echo DEFAULT_${KEY} | tr '[:lower:]' '[:upper:]')
+					VALUE=${2:-$(eval echo \${${VALUE_VAR}})}
+					DESCRIPTION=${CONFIG_DESCRIPTIONS[${KEY}]}
+					echo " ${KEY}: ${DESCRIPTION}"
+					echo "	Ex: $(basename $0) config ${KEY} ${VALUE}"
+				done
+				echo " gpgkey: configure which gpg key to use."
+				echo "	Ex: $(basename $0) config gpgkey ${DEFAULT_GPGKEY}"
 				;;
 			*)
-				echo $(basename $0) config "<config_name>" "<config_value>"
-				echo ""
-				echo "config names:"
-				echo "	store		The local repository for state."
-				echo "			Ex: $(basename $0) config store ${DEFAULT_STORE}"
-				echo "	network		network of all ceph nodes."
-				echo "			Ex: $(basename $0) config network ${DEFAULT_NETWORK}"
-				echo "	nodeadm		to provide the control to all nodes."
-				echo "			Ex: $(basename $0) config nodeadm '${DEFAULT_NODEADM}'"
-				echo "	monitors	the ceph monitor nodes."
-				echo "			Ex: $(basename $0) config monitors '${DEFAULT_MONITORS}'"
-				echo "	osdmap		to provide the control to all nodes."
-				echo "			Ex: $(basename $0) config osdmap '${DEFAULT_OSDMAP}'"
-				echo "	mdsnode		the ceph mds node."
-				echo "			Ex: $(basename $0) config mdsnode '${DEFAULT_MDSNODE}'"
-				echo "	pgnum		the pgnum of ceph mds pools."
-				echo "			Ex: $(basename $0) config pgnum '${DEFAULT_PGNUM}'"
-				echo "	gpg		configure which gpg key to use."
-				echo "			Ex: $(basename $0) config gpg ${DEFAULT_GPGKEYNAME}"
+				KEY=$1
+				VALUE_VAR=$(echo DEFAULT_${KEY} | tr '[:lower:]' '[:upper:]')
+				VALUE=${2:-$(eval echo \${${VALUE_VAR}})}
+				eval echo \'${VALUE}\' > ${CONFIG}/${KEY}
 				;;
 		esac
 		;;
@@ -168,30 +181,10 @@ case $1 in
 		mkdir -p ${SECRET}
 		chmod -R go-rwx ${SECRET}
 
-		SEEDNODE=$(echo ${MONITORS} | cut -d' ' -f1)
-		SEEDNODEIP=$(cat /etc/hosts | grep "[\t ]*${SEEDNODE}$" | cut -d' ' -f1)
-
-		cd ${NODEADM}
-		./zss0 exec ${SEEDNODE} "
-			cd ~/docker-apps/storage/ceph ;
-			./ws mon ${SEEDNODEIP} ${NETWORK} ;
-			"
-		for ROLE in osd mds rbd rgw
-		do
-			while ./zss0 exec ${SEEDNODE} "[ ! -f ~/store/ceph/var/lib/ceph/bootstrap-${ROLE}/ceph.keyring ]"
-			do
-				echo Waiting bootstrap-${ROLE}/ceph.keyring...
-				sleep 1
-			done
-		done
-		./zss0 exec ${SEEDNODE} "
-			cd ~/docker-apps/storage/ceph ;
-			./ws clean ;
-			"
-		rm -f ${CEPH_FILE}
-		./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEYNAME} -o ${CEPH_FILE}
-		./zss0 exec ${SEEDNODE} "sudo rm -rf ~/store/ceph"
-		cd - &> /dev/null
+		# AppImplementing Section: secret-create
+		#------------------------------------------------------------------------------
+		source ./zss0.impl secret-create
+		#------------------------------------------------------------------------------
 
 		gpg --gen-random --armor 2 16 | base64 | cut -c1-16 > ${SALT}
 		;;
@@ -215,17 +208,21 @@ case $1 in
 					echo ${STATENAME} > ${CONFIG}/base_secret
 					mv -f ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc ${STORE}/state/${STATENAME}-bak-${APPNAME}-secret.tgz.enc &>/dev/null
 					cd ${SECRET}
-					tar -zc . | gpg -ear ${GPGKEYNAME} -o ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc
+					tar -zc . | \
+						gpg -ear ${GPGKEY} -o ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc
 					cd - &> /dev/null
 				fi
 				if [ "${TYPE}" == "data" -o "${TYPE}" == "" ]; then
-					echo "DATA state not support."
+					echo ${STATENAME} > ${CONFIG}/base_data
+					# AppImplementing Section: data save
+					#------------------------------------------------------------------------------
+					source ./zss0.impl state-data-save
+					#------------------------------------------------------------------------------
 				fi
 				;;
 			"load")
 				if [ "${TYPE}" == "config" -o "${TYPE}" == "" ]; then
-					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-config.tgz ]
-					then
+					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-config.tgz ]; then
 						cd ${CONFIG}
 						tar -zxf ${STORE}/state/${STATENAME}-${APPNAME}-config.tgz
 						cd - &> /dev/null
@@ -233,16 +230,23 @@ case $1 in
 					echo ${STATENAME} > ${CONFIG}/base_config
 				fi
 				if [ "${TYPE}" == "secret" -o "${TYPE}" == "" ]; then
-					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc ]
-					then
+					if [ -e ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc ]; then
 						cd ${SECRET}
 						gpg -d ${STORE}/state/${STATENAME}-${APPNAME}-secret.tgz.enc | tar xz
 						cd - &> /dev/null
+						# AppImplementing Section: secret load post
+						#------------------------------------------------------------------------------
+						source $(dirname $0)/zss0.impl state-secret-load-post
+						#------------------------------------------------------------------------------
 					fi
 					echo ${STATENAME} > ${CONFIG}/base_secret
 				fi
 				if [ "${TYPE}" == "data" -o "${TYPE}" == "" ]; then
-					echo "DATA state not support."
+					# AppImplementing Section: data load
+					#------------------------------------------------------------------------------
+					source ./zss0.impl state-data-load
+					#------------------------------------------------------------------------------
+					echo ${STATENAME} > ${CONFIG}/base_data
 				fi
 				;;
 			"list"|*)
@@ -250,19 +254,19 @@ case $1 in
 				NC='\033[0m'
 				if [ "${TYPE}" == "config" -o "${TYPE}" == "" ]; then
 					echo -e "${HC}## CONFIG: ${BASE_CONFIG}${NC}"
-					cd ${STORE}/state
+					cd ${STATE}
 					ls *-${APPNAME}-config.tgz 2>/dev/null | sed "s/\(.*\)-${APPNAME}-config.tgz/           \1/"
 					cd - &>/dev/null
 				fi
 				if [ "${TYPE}" == "secret" -o "${TYPE}" == "" ]; then
 					echo -e "${HC}## SECRET: ${BASE_SECRET}${NC}"
-					cd ${STORE}/state
+					cd ${STATE}
 					ls *-${APPNAME}-secret.tgz.enc 2>/dev/null | sed "s/\(.*\)-${APPNAME}-secret.tgz.enc/           \1/"
 					cd - &>/dev/null
 				fi
 				if [ "${TYPE}" == "data" -o "${TYPE}" == "" ]; then
 					echo -e "${HC}## DATA  : ${BASE_DATA}${NC}"
-					cd ${STORE}/data
+					cd ${STATE}
 					ls *-${APPNAME}-data.tgz.enc 2>/dev/null | sed "s/\(.*\)-${APPNAME}-data.tgz.enc/           \1/"
 					cd - &>/dev/null
 				fi
@@ -272,247 +276,25 @@ case $1 in
 				;;
 		esac
 		;;
-	"nodes")
-		shift
-		declare -A NODES
-		for NODE in ${MONITORS} ${MDSNODE} ${!OSDMAP[@]}
-		do
-			NODES[$NODE]=1
-		done
-		echo ${!NODES[@]}
-		;;
-	"activemds")
-		echo $(./zss0 env | grep MONITORS | cut -d: -f2) | sed 's/ /,/g'
-		;;
-	"preflight")
-		shift
-		NODES=${*:-$($0 nodes)}
-		echo ${NODES} preflight...
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
-			gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxf - -C ~/store/ceph"
-		done
-		cd - &> /dev/null
-		;;
-	"clean")
-		shift
-		$0 mds down
-		$0 osd down
-		NODES=${*:-$($0 nodes)}
-		echo ${NODES} clean...
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			./zss0 exec ${NODE} "
-				cd ~/docker-apps/storage/ceph ;
-				./ws clean ;
-				sudo rm -rf ~/store/ceph ;
-				"
-		done
-		cd - &> /dev/null
-		;;
-	"network")
-		shift
-		ONOFF=$1
-		shift
-		NODES=${*:-$($0 nodes)}
-
-		cd ${NODEADM}
-		for NODE in ${NODES}
-		do
-			case ${ONOFF} in
-			"up")
-				NODEIP=$(grep "[\t ]*${NODE}$" /etc/hosts | head -1 | cut -d' ' -f1)
-				./zss0 exec-for-all "
-					sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
-					"
-				;;
-			"down")
-				RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep ceph-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
-				while [ "${RULENUM}" != "" ]
-				do
-					echo y | ./zss0 exec ${NODE} "sudo ufw delete ${RULENUM}"
-					RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep ceph-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
-				done
-				;;
-			"status")
-				./zss0 exec ${NODE} "sudo ufw status numbered | grep 'ceph-adm'"
-				;;
-			*)
-				$0 ; exit 1
-				;;
-			esac
-		done
-		cd - &> /dev/null
-		;;
-	"mon")
-		# https://access.redhat.com/documentation/en-us/red_hat_ceph_storage/1.2.3/html/red_hat_ceph_administration_guide/remove_a_monitor
-		# http://docs.ceph.com/docs/mimic/mgr/administrator/
-		shift
-		NODES=${2:-${MONITORS}}
-		case $1 in
-		"up")
-			for NODE in ${NODES}
-			do
-				NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
-				cd ${NODEADM}
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws mon ${NODEIP} ${NETWORK} ;
-					./ws mgr ;
-					"
-				cd - &> /dev/null
-			done
-			;;
-		"down")
-			for NODE in ${NODES}
-			do
-				NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
-				./zss0 ceph mgr fail ${NODE}
-				./zss0 ceph mon remove ${NODE}
-				cd ${NODEADM}
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					docker stop mgr ; docker rm mgr ;
-					docker stop mon ; docker rm mon ;
-					"
-				cd - &> /dev/null
-			done
-			;;
-		*)
-			$0 ; exit 1
-			;;
-		esac
-		;;
-	"osd")
-		# http://docs.ceph.com/docs/mimic/rados/operations/add-or-rm-osds/
-		shift
-		NODES=${2:-${!OSDMAP[@]}}
-		case $1 in
-		"up")
-			for NODE in ${NODES}
-			do
-				cd ${NODEADM}
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws zap ${OSDMAP[${NODE}]} ;
-					./ws osds ${OSDMAP[${NODE}]} ;
-					"
-				cd - &> /dev/null
-			done
-			;;
-		"down")
-			for NODE in ${NODES}
-			do
-				OSDDEV=${OSDMAP[${NODE}]}
-				cd ${NODEADM}
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws osdclean ${OSDMAP[${NODE}]} ;
-					"
-				cd - &> /dev/null
-			done
-			;;
-		*)
-			$0 ; exit 1
-			;;
-		esac
-		;;
-	"mds")
-		shift
-		cd ${NODEADM}
-		NODES=${MDSNODE}
-		case $1 in
-		"up")
-			for NODE in ${NODES}
-			do
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws mds ${PGNUM} ;
-					"
-			done
-			;;
-		"down")
-			for NODE in ${NODES}
-			do
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws mdsclean ;
-					"
-			done
-			;;
-		*)
-			$0 ; exit 1
-			;;
-		esac
-		cd - &> /dev/null
-		;;
-	"mdsmount")
-		shift
-		ACTIVEMDS=$($0 activemds)
-		cd ${NODEADM}
-		NODES=${!OSDMAP[@]}
-		for NODE in ${NODES}
-		do
-			./zss0 exec ${NODE} "
-				cd ~/docker-apps/storage/ceph ;
-				./ws mdsmount ${ACTIVEMDS} ;
-				"
-		done
-		cd - &> /dev/null
-		;;
-	"ceph")
-		shift
-		COMMANDS=$*
-		cd ${NODEADM}
-		NODES=${MONITORS}
-		for NODE in ${NODES}
-		do
-			./zss0 exec ${NODE} "docker exec mon ceph ${COMMANDS}" && break
-		done
-		cd - &> /dev/null
-		;;
-	"kube-secret")
-		shift
-		NAMESPACE=${2:-default}
-		case $1 in
-		"up")
-			kubectl get secret -n ${NAMESPACE} | grep ceph-secret
-			if [ $? -eq 1 ]
-			then
-				KEY=$(gpg -d ${CEPH_FILE} | tar zxf - ./etc/ceph/ceph.client.admin.keyring -O | grep key | cut -d= -f2-)
-				cat <<EOF | kubectl create -f -
-apiVersion: v1
-data:
-  key: $(echo ${KEY} | base64)
-kind: Secret
-metadata:
-  name: ceph-secret
-  namespace: ${NAMESPACE}
-type: Opaque
-EOF
-fi
-			;;
-		"down")
-			kubectl delete secret ceph-secret -n ${NAMESPACE}
-			;;
-		esac
-		;;
-	*)
+	"")
 		echo $(basename $0) version
 		echo $(basename $0) env
 		echo $(basename $0) config ...
 		echo $(basename $0) secret-create
 		echo $(basename $0) "state [list/save/load] [config/secret/data] [state_name, ex: date-stage-env]"
-		echo $(basename $0) "[nodes/activemds]"
-		echo $(basename $0) "[preflight/clean] [nodes]"
-		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes]"
-		echo $(basename $0) "mdsmount"
-		echo $(basename $0) "ceph ..."
-		echo $(basename $0) "kube-secret [up/down] [namespace]"
+		# AppImplementing Section: usage
+		#------------------------------------------------------------------------------
+		source ./zss0.impl usage
+		#------------------------------------------------------------------------------
 		;;
+	# AppImplementing Section: commands
+	#------------------------------------------------------------------------------
+	*)
+		COMMAND=$1
+		shift
+		ARGS=$*
+		source ./zss0.impl command ${COMMAND} ${ARGS}
+		;;
+	#------------------------------------------------------------------------------
 esac
 
