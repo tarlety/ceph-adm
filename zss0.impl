@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.0
+		APPVERSION=0.1.1
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -58,7 +58,7 @@ case $1 in
 			./ws clean ;
 			"
 		rm -f ${CEPH_FILE}
-		./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEYNAME} -o ${CEPH_FILE}
+		./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEY} -o ${CEPH_FILE}
 		./zss0 exec ${SEEDNODE} "sudo rm -rf ~/store/ceph"
 		cd - &> /dev/null
 		;;
