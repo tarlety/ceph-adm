@@ -207,12 +207,15 @@ case $1 in
 			"down")
 				for NODE in ${NODES}
 				do
-					OSDDEV=${OSDMAP[${NODE}]}
+					OSDDEVS=${3:-OSDMAP[${NODE}]}
 					cd ${NODEADM}
-					./zss0 exec ${NODE} "
-						cd ~/docker-apps/storage/ceph ;
-						./ws osdclean ${OSDMAP[${NODE}]} ;
-						"
+					for OSDDEV in ${OSDDEVS}
+					do
+						./zss0 exec ${NODE} "
+							cd ~/docker-apps/storage/ceph ;
+							./ws osdclean ${OSDDEV} ;
+							"
+					done
 					cd - &> /dev/null
 				done
 				;;
@@ -264,6 +267,17 @@ case $1 in
 			done
 			cd - &> /dev/null
 			;;
+		"osdrm")
+			shift
+			IDS=$*
+			for ID in ${IDS}
+			do
+				$0 ceph osd out $ID
+				$0 ceph osd crush remove osd.$ID
+				$0 ceph osd rm $ID
+				$0 ceph auth del osd.$ID
+			done
+			;;
 		"ceph")
 			shift
 			COMMANDS=$*
@@ -308,7 +322,8 @@ EOF
 		echo $(basename $0) "[nodes/activemds]"
 		echo $(basename $0) "[preflight/clean] [nodes]"
 		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes]"
+		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes] [osds]"
+		echo $(basename $0) "osdrm id1 id2 ..."
 		echo $(basename $0) "mdsmount"
 		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
