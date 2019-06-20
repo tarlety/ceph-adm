@@ -195,7 +195,7 @@ case $1 in
 			"up")
 				for NODE in ${NODES}
 				do
-					OSDDEVS=${3:-OSDMAP[${NODE}]}
+					OSDDEVS=${3:-${OSDMAP[${NODE}]}}
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
