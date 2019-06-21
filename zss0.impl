@@ -238,7 +238,7 @@ case $1 in
 			cd ${NODEADM}
 			ACTION=$1
 			shift
-			NODES=${*:-${MDSNODE}}
+			NODES=${2:-${MDSNODE}}
 			case ${ACTION} in
 			"up")
 				for NODE in ${NODES}
@@ -356,7 +356,7 @@ EOF
 		echo $(basename $0) "[nodes/activemds]"
 		echo $(basename $0) "[preflight/clean] [nodes]"
 		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes] [osds]"
+		echo $(basename $0) "[mon/osd/mds] [up/down] [node] [osds]"
 		echo $(basename $0) "osdrm id1 id2 ..."
 		echo $(basename $0) "mdsclean"
 		echo $(basename $0) "mdsmount"
