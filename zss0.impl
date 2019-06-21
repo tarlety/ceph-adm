@@ -58,7 +58,7 @@ case $1 in
 			./ws clean ;
 			"
 		rm -f ${CEPH_FILE}
-		./zss0 exec ${SEEDNODE} "sudo tar -zcf - -C ~/store/ceph ." | gpg -ear ${GPGKEY} -o ${CEPH_FILE}
+		./zss0 exec ${SEEDNODE} "sudo tar -zcpf - -C ~/store/ceph ." | gpg -ear ${GPGKEY} -o ${CEPH_FILE}
 		./zss0 exec ${SEEDNODE} "sudo rm -rf ~/store/ceph"
 		cd - &> /dev/null
 		;;
@@ -93,7 +93,7 @@ case $1 in
 			for NODE in ${NODES}
 			do
 				./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
-				gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxf - -C ~/store/ceph"
+				gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxpf - -C ~/store/ceph"
 			done
 			cd - &> /dev/null
 			;;
