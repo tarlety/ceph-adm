@@ -157,7 +157,7 @@ case $1 in
 			"up")
 				for NODE in ${NODES}
 				do
-					echo UP ${NODE}.mon,mgr
+					echo UP ${NODE}.mon ${NODE}.mgr
 					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
@@ -171,7 +171,7 @@ case $1 in
 			"down")
 				for NODE in ${NODES}
 				do
-					echo DOWN ${NODE}.mon,mgr
+					echo DOWN ${NODE}.mon ${NODE}.mgr
 					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
 					./zss0 ceph mgr fail ${NODE}
 					./zss0 ceph mon remove ${NODE}
@@ -232,8 +232,10 @@ case $1 in
 		"mds")
 			shift
 			cd ${NODEADM}
-			NODES=${2:-${MDSNODE}}
-			case $1 in
+			ACTION=$1
+			shift
+			NODES=${*:-${MDSNODE}}
+			case ${ACTION} in
 			"up")
 				for NODE in ${NODES}
 				do
@@ -250,7 +252,7 @@ case $1 in
 					echo DOWN ${NODE}.mds
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
-						./ws mdsclean ;
+						./ws mdsrm ;
 						"
 				done
 				;;
@@ -260,18 +262,38 @@ case $1 in
 			esac
 			cd - &> /dev/null
 			;;
-		"mdsmount")
+		"mdsclean")
 			shift
-			ACTIVEMDS=$($0 activemds)
 			cd ${NODEADM}
-			NODES=${!OSDMAP[@]}
+			NODES=${2:-${MONITORS}}
 			for NODE in ${NODES}
 			do
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
+					./ws mdsclean ;
+					" && break
+			done
+			cd - &> /dev/null
+			;;
+		"mdsmount")
+			shift
+			ACTIVEMDS=$($0 activemds)
+			NODES=$*
+			cd ${NODEADM}
+			if [ -z "${NODES}" ]; then
+				./zss0 exec-for-all "
+					cd ~/docker-apps/storage/ceph ;
 					./ws mdsmount ${ACTIVEMDS} ;
 					"
-			done
+			else
+				for NODE in ${NODES}
+				do
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						./ws mdsmount ${ACTIVEMDS} ;
+						"
+				done
+			fi
 			cd - &> /dev/null
 			;;
 		"osdrm")
@@ -331,6 +353,8 @@ EOF
 		echo $(basename $0) "network [up/down/status] [nodes]"
 		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes] [osds]"
 		echo $(basename $0) "osdrm id1 id2 ..."
+		echo $(basename $0) "mdsrm [nodes]"
+		echo $(basename $0) "mdsclean"
 		echo $(basename $0) "mdsmount"
 		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
