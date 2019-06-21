@@ -173,13 +173,16 @@ case $1 in
 				do
 					echo DOWN ${NODE}.mon ${NODE}.mgr
 					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
+					echo Remove ${NODE} from mgr
 					./zss0 ceph mgr fail ${NODE}
+					echo Remove ${NODE} from mon
 					./zss0 ceph mon remove ${NODE}
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
 						docker stop mgr ; docker rm mgr ;
 						docker stop mon ; docker rm mon ;
+						./ws monreset ; ./ws mgrreset
 						"
 					cd - &> /dev/null
 				done
@@ -219,6 +222,7 @@ case $1 in
 						./zss0 exec ${NODE} "
 							cd ~/docker-apps/storage/ceph ;
 							./ws osdclean ${OSDDEV} ;
+							./ws osdreset ;
 							"
 					done
 					cd - &> /dev/null
@@ -252,7 +256,8 @@ case $1 in
 					echo DOWN ${NODE}.mds
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
-						./ws mdsrm ;
+						docker stop mds ; docker rm mds ;
+						./ws mdsreset ;
 						"
 				done
 				;;
@@ -353,7 +358,6 @@ EOF
 		echo $(basename $0) "network [up/down/status] [nodes]"
 		echo $(basename $0) "[mon/osd/mds] [up/down] [nodes] [osds]"
 		echo $(basename $0) "osdrm id1 id2 ..."
-		echo $(basename $0) "mdsrm [nodes]"
 		echo $(basename $0) "mdsclean"
 		echo $(basename $0) "mdsmount"
 		echo $(basename $0) "ceph ..."
