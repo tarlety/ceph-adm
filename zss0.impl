@@ -39,6 +39,7 @@ case $1 in
 	"secret-create")
 		SEEDNODE=$(echo ${MONITORS} | cut -d' ' -f1)
 		SEEDNODEIP=$(cat /etc/hosts | grep "[\t ]*${SEEDNODE}$" | cut -d' ' -f1)
+		MONS=$($0 mons)
 
 		cd ${NODEADM}
 		./zss0 exec ${SEEDNODE} "
@@ -56,6 +57,7 @@ case $1 in
 		./zss0 exec ${SEEDNODE} "
 			cd ~/docker-apps/storage/ceph ;
 			./ws clean ;
+			./ws reconfig-mons ${MONS} ;
 			"
 		rm -f ${CEPH_FILE}
 		./zss0 exec ${SEEDNODE} "sudo tar -zcpf - -C ~/store/ceph ." | gpg -ear ${GPGKEY} -o ${CEPH_FILE}
@@ -82,7 +84,7 @@ case $1 in
 			done
 			echo ${!NODES[@]}
 			;;
-		"activemds")
+		"mons")
 			echo $(./zss0 env | grep MONITORS | cut -d: -f2) | sed 's/ /,/g'
 			;;
 		"preflight")
@@ -108,8 +110,7 @@ case $1 in
 			do
 				./zss0 exec ${NODE} "
 					cd ~/docker-apps/storage/ceph ;
-					./ws clean ;
-					sudo rm -rf ~/store/ceph ;
+					./ws cleanclean ;
 					"
 			done
 			cd - &> /dev/null
@@ -280,7 +281,7 @@ case $1 in
 			;;
 		"mdsmount")
 			shift
-			ACTIVEMDS=$($0 activemds)
+			ACTIVEMDS=$($0 mons)
 			NODES=$*
 			cd ${NODEADM}
 			if [ -z "${NODES}" ]; then
@@ -351,7 +352,7 @@ EOF
 		;;
 	#------------------------------------------------------------------------------
 	"usage")
-		echo $(basename $0) "[nodes/activemds]"
+		echo $(basename $0) "[nodes/mons]"
 		echo $(basename $0) "[preflight/clean] [nodes]"
 		echo $(basename $0) "network [up/down/status] [nodes]"
 		echo $(basename $0) "[mon/osd/mds] [up/down] [node] [osds]"
