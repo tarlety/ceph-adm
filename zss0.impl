@@ -232,7 +232,7 @@ case $1 in
 		"mds")
 			shift
 			cd ${NODEADM}
-			NODES=${MDSNODE}
+			NODES=${2:-${MDSNODE}}
 			case $1 in
 			"up")
 				for NODE in ${NODES}
