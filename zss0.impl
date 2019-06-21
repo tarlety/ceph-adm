@@ -172,7 +172,6 @@ case $1 in
 				for NODE in ${NODES}
 				do
 					echo DOWN ${NODE}.mon ${NODE}.mgr
-					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
 					echo Remove ${NODE} from mgr
 					./zss0 ceph mgr fail ${NODE}
 					echo Remove ${NODE} from mon
