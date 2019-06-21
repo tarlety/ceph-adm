@@ -157,6 +157,7 @@ case $1 in
 			"up")
 				for NODE in ${NODES}
 				do
+					echo UP ${NODE}.mon,mgr
 					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
@@ -170,6 +171,7 @@ case $1 in
 			"down")
 				for NODE in ${NODES}
 				do
+					echo DOWN ${NODE}.mon,mgr
 					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
 					./zss0 ceph mgr fail ${NODE}
 					./zss0 ceph mon remove ${NODE}
@@ -195,6 +197,7 @@ case $1 in
 			"up")
 				for NODE in ${NODES}
 				do
+					echo UP ${NODE}.osd ${OSDDEVS}
 					OSDDEVS=${3:-${OSDMAP[${NODE}]}}
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
@@ -212,6 +215,7 @@ case $1 in
 					cd ${NODEADM}
 					for OSDDEV in ${OSDDEVS}
 					do
+						echo DOWN ${NODE}.osd ${OSDDEV}
 						./zss0 exec ${NODE} "
 							cd ~/docker-apps/storage/ceph ;
 							./ws osdclean ${OSDDEV} ;
@@ -233,6 +237,7 @@ case $1 in
 			"up")
 				for NODE in ${NODES}
 				do
+					echo UP ${NODE}.mds
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
 						./ws mds ${PGNUM} ;
@@ -242,6 +247,7 @@ case $1 in
 			"down")
 				for NODE in ${NODES}
 				do
+					echo DOWN ${NODE}.mds
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
 						./ws mdsclean ;
