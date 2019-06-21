@@ -237,7 +237,6 @@ case $1 in
 			shift
 			cd ${NODEADM}
 			ACTION=$1
-			shift
 			NODES=${2:-${MDSNODE}}
 			case ${ACTION} in
 			"up")
