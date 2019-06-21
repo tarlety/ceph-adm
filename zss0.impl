@@ -40,6 +40,7 @@ case $1 in
 		SEEDNODE=$(echo ${MONITORS} | cut -d' ' -f1)
 		SEEDNODEIP=$(cat /etc/hosts | grep "[\t ]*${SEEDNODE}$" | cut -d' ' -f1)
 		MONS=$($0 mons)
+		MONSIP=$($0 monsip)
 
 		cd ${NODEADM}
 		./zss0 exec ${SEEDNODE} "
@@ -57,7 +58,7 @@ case $1 in
 		./zss0 exec ${SEEDNODE} "
 			cd ~/docker-apps/storage/ceph ;
 			./ws clean ;
-			./ws reconfig-mons ${MONS} ;
+			./ws reconfig-mons ${MONS} ${MONSIP};
 			"
 		rm -f ${CEPH_FILE}
 		./zss0 exec ${SEEDNODE} "sudo tar -zcpf - -C ~/store/ceph ." | gpg -ear ${GPGKEY} -o ${CEPH_FILE}
@@ -85,7 +86,13 @@ case $1 in
 			echo ${!NODES[@]}
 			;;
 		"mons")
-			echo $(./zss0 env | grep MONITORS | cut -d: -f2) | sed 's/ /,/g'
+			echo $($0 env MONITORS | cut -d: -f2) | sed 's/ /,/g'
+			;;
+		"monsip")
+			for mon in $($0 env MONITORS)
+			do
+				echo -n "$(cat /etc/hosts | grep "[\t ]*${mon}$" | cut -d' ' -f1) "
+			done | sed 's/ [^$]/,/g'
 			;;
 		"preflight")
 			shift
@@ -96,6 +103,21 @@ case $1 in
 			do
 				./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
 				gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxpf - -C ~/store/ceph"
+			done
+			cd - &> /dev/null
+			;;
+		"remons")
+			shift
+			NODES=${*:-$($0 nodes)}
+			MONS=$($0 mons)
+			MONSIP=$($0 monsip)
+			cd ${NODEADM}
+			for NODE in ${NODES}
+			do
+				./zss0 exec ${NODE} "
+					cd ~/docker-apps/storage/ceph ;
+					./ws reconfig-mons ${MONS} ${MONSIP};
+					"
 			done
 			cd - &> /dev/null
 			;;
@@ -352,8 +374,8 @@ EOF
 		;;
 	#------------------------------------------------------------------------------
 	"usage")
-		echo $(basename $0) "[nodes/mons]"
-		echo $(basename $0) "[preflight/clean] [nodes]"
+		echo $(basename $0) "[nodes/mons/monsip]"
+		echo $(basename $0) "[preflight/clean/remons] [nodes]"
 		echo $(basename $0) "network [up/down/status] [nodes]"
 		echo $(basename $0) "[mon/osd/mds] [up/down] [node] [osds]"
 		echo $(basename $0) "osdrm id1 id2 ..."
