@@ -383,6 +383,15 @@ EOF
 		echo $(basename $0) "mdsmount"
 		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
+		echo ""
+		echo "Usage:"
+		echo "1. ./$(basename $0) config ..."
+		echo "2. ./$(basename $0) secret-create"
+		echo "3. ./$(basename $0) network up"
+		echo "4. ./$(basename $0) mon up"
+		echo "5. ./$(basename $0) osd up"
+		echo "6. ./$(basename $0) mds up"
+		echo "7. ./$(basename $0) mdsmount"
 		;;
 esac
 
