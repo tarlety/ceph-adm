@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.1
+		APPVERSION=0.1.2
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -181,7 +181,7 @@ case $1 in
 				for NODE in ${NODES}
 				do
 					echo UP ${NODE}.mon ${NODE}.mgr
-					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}$" | cut -d' ' -f1)
+					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}[ $]" | cut -d' ' -f1)
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
