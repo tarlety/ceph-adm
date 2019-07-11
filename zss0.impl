@@ -58,7 +58,8 @@ case $1 in
 		./zss0 exec ${SEEDNODE} "
 			cd ~/docker-apps/storage/ceph ;
 			./ws clean ;
-			./ws reconfig-mons ${MONS} ${MONSIP};
+			./ws reconfig-mons ${MONS} ${MONSIP} ;
+			sudo rm -rf ~/store/ceph/var/lib/ceph/mon ;
 			"
 		rm -f ${CEPH_FILE}
 		./zss0 exec ${SEEDNODE} "sudo tar -zcpf - -C ~/store/ceph ." | gpg -ear ${GPGKEY} -o ${CEPH_FILE}
@@ -92,7 +93,7 @@ case $1 in
 			for mon in $($0 env MONITORS)
 			do
 				echo -n "$(cat /etc/hosts | grep -P "[\t ]*${mon}( |$)" | cut -d' ' -f1) "
-			done | sed 's/ [^$]/,/g'
+			done | sed 's/ \([^$]\)/,\1/g'
 			;;
 		"preflight")
 			shift
