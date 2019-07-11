@@ -38,7 +38,7 @@ case $1 in
 		;;
 	"secret-create")
 		SEEDNODE=$(echo ${MONITORS} | cut -d' ' -f1)
-		SEEDNODEIP=$(cat /etc/hosts | grep "[\t ]*${SEEDNODE}( |$)" | cut -d' ' -f1)
+		SEEDNODEIP=$(cat /etc/hosts | grep -P "[\t ]*${SEEDNODE}( |$)" | cut -d' ' -f1)
 		MONS=$($0 mons)
 		MONSIP=$($0 monsip)
 
@@ -91,7 +91,7 @@ case $1 in
 		"monsip")
 			for mon in $($0 env MONITORS)
 			do
-				echo -n "$(cat /etc/hosts | grep "[\t ]*${mon}( |$)" | cut -d' ' -f1) "
+				echo -n "$(cat /etc/hosts | grep -P "[\t ]*${mon}( |$)" | cut -d' ' -f1) "
 			done | sed 's/ [^$]/,/g'
 			;;
 		"preflight")
@@ -149,7 +149,7 @@ case $1 in
 			do
 				case ${ONOFF} in
 				"up")
-					NODEIP=$(grep "[\t ]*${NODE}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
+					NODEIP=$(grep -P "[\t ]*${NODE}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
 					./zss0 exec-for-all "
 						sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
 						"
@@ -182,7 +182,7 @@ case $1 in
 				for NODE in ${NODES}
 				do
 					echo UP ${NODE}.mon ${NODE}.mgr
-					NODEIP=$(cat /etc/hosts | grep "[\t ]*${NODE}( |$)" | cut -d' ' -f1)
+					NODEIP=$(cat /etc/hosts | grep -P "[\t ]*${NODE}( |$)" | cut -d' ' -f1)
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
