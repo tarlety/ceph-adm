@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.4
+		APPVERSION=0.1.5
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -388,10 +388,12 @@ EOF
 		echo "1. ./$(basename $0) config ..."
 		echo "2. ./$(basename $0) secret-create"
 		echo "3. ./$(basename $0) network up"
-		echo "4. ./$(basename $0) mon up"
-		echo "5. ./$(basename $0) osd up"
-		echo "6. ./$(basename $0) mds up"
-		echo "7. ./$(basename $0) mdsmount"
+		echo "4. ./$(basename $0) preflight"
+		echo "5. ./$(basename $0) remons"
+		echo "6. ./$(basename $0) mon up"
+		echo "7. ./$(basename $0) osd up"
+		echo "8. ./$(basename $0) mds up"
+		echo "9. ./$(basename $0) mdsmount"
 		;;
 esac
 
