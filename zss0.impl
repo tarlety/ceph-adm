@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.3
+		APPVERSION=0.1.4
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -91,7 +91,7 @@ case $1 in
 		"monsip")
 			for mon in $($0 env MONITORS)
 			do
-				echo -n "$(cat /etc/hosts | grep "[\t ]*${mon}$" | cut -d' ' -f1) "
+				echo -n "$(cat /etc/hosts | grep "[\t ]*${mon}[ $]" | cut -d' ' -f1) "
 			done | sed 's/ [^$]/,/g'
 			;;
 		"preflight")
@@ -148,7 +148,7 @@ case $1 in
 			do
 				case ${ONOFF} in
 				"up")
-					NODEIP=$(grep "[\t ]*${NODE}$" /etc/hosts | head -1 | cut -d' ' -f1)
+					NODEIP=$(grep "[\t ]*${NODE}[ $]" /etc/hosts | head -1 | cut -d' ' -f1)
 					./zss0 exec-for-all "
 						sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
 						"
