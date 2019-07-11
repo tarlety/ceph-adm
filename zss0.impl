@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.5
+		APPVERSION=0.1.6
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -103,6 +103,7 @@ case $1 in
 			do
 				./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
 				gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxpf - -C ~/store/ceph"
+				./zss0 exec ${NODE} "sudo chown 64045:64045 ~/store/ceph/var/log/ceph"
 			done
 			cd - &> /dev/null
 			;;
@@ -380,7 +381,7 @@ EOF
 		echo $(basename $0) "[mon/osd/mds] [up/down] [node] [osds]"
 		echo $(basename $0) "osdrm id1 id2 ..."
 		echo $(basename $0) "mdsclean"
-		echo $(basename $0) "mdsmount"
+		echo $(basename $0) "mdsmount [nodes]"
 		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
 		echo ""
