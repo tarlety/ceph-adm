@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.9
+		APPVERSION=0.1.10
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -109,7 +109,11 @@ case $1 in
 			do
 				./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
 				gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxpf - -C ~/store/ceph"
-				./zss0 exec ${NODE} "sudo chown 64045:64045 ~/store/ceph/var/log/ceph"
+				./zss0 exec ${NODE} "
+					sudo cp -rf ~/store/ceph/etc/ceph/* /etc/ceph ;
+					sudo cp -rf ~/store/ceph/var/lib/ceph/* /etc/ceph ;
+					sudo rm -rf ~/store/ceph
+					"
 			done
 			cd - &> /dev/null
 			;;
@@ -122,8 +126,8 @@ case $1 in
 			for NODE in ${NODES}
 			do
 				./zss0 exec ${NODE} "
-					sudo sed -i -e 's/^mon initial members = .*/mon initial members = ${MONS}/' ~/store/ceph/etc/ceph/ceph.conf
-					sudo sed -i -e 's/^mon host = .*/mon host = ${MONSIP}/' ~/store/ceph/etc/ceph/ceph.conf
+					sudo sed -i -e 's/^mon initial members = .*/mon initial members = ${MONS}/' /etc/ceph/ceph.conf ;
+					sudo sed -i -e 's/^mon host = .*/mon host = ${MONSIP}/' /etc/ceph/ceph.conf ;
 					"
 			done
 			cd - &> /dev/null
@@ -219,8 +223,8 @@ case $1 in
 					echo CLEAN ${NODE}.mon ${NODE}.mgr
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
-						sudo rm -rf ~/store/ceph/var/lib/ceph/mon/*
-						sudo rm -rf ~/store/ceph/var/lib/ceph/mgr/*
+						sudo rm -rf /var/lib/ceph/mon/*
+						sudo rm -rf /var/lib/ceph/mgr/*
 						"
 					cd - &> /dev/null
 				done
@@ -336,7 +340,7 @@ case $1 in
 				for NODE in ${NODES}
 				do
 					./zss0 exec ${NODE} "
-						sudo rm -rf ~/store/ceph/var/lib/ceph/mds/*
+						sudo rm -rf /var/lib/ceph/mds/*
 						" && break
 				done
 				cd - &> /dev/null
