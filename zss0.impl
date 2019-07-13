@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.6
+		APPVERSION=0.1.9
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -55,6 +55,11 @@ case $1 in
 				sleep 1
 			done
 		done
+		cd - &> /dev/null
+
+		./zss0 remons
+
+		cd ${NODEADM}
 		./zss0 exec ${SEEDNODE} "
 			cd ~/docker-apps/storage/ceph ;
 			./ws clean ;
@@ -117,8 +122,8 @@ case $1 in
 			for NODE in ${NODES}
 			do
 				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws reconfig-mons ${MONS} ${MONSIP};
+					sudo sed -i -e 's/^mon initial members = .*/mon initial members = ${MONS}/' ~/store/ceph/etc/ceph/ceph.conf
+					sudo sed -i -e 's/^mon host = .*/mon host = ${MONSIP}/' ~/store/ceph/etc/ceph/ceph.conf
 					"
 			done
 			cd - &> /dev/null
@@ -127,17 +132,10 @@ case $1 in
 			shift
 			$0 mds down
 			$0 osd down
-			NODES=${*:-$($0 nodes)}
-			echo ${NODES} clean...
-			cd ${NODEADM}
-			for NODE in ${NODES}
-			do
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws cleanclean ;
-					"
-			done
-			cd - &> /dev/null
+			$0 mon down
+			$0 mds clean
+			$0 osd clean
+			$0 mon clean
 			;;
 		"network")
 			shift
@@ -202,13 +200,29 @@ case $1 in
 						cd ~/docker-apps/storage/ceph ;
 						docker stop mgr ; docker rm mgr ;
 						docker stop mon ; docker rm mon ;
-						./ws monreset ; ./ws mgrreset
 						"
 					cd - &> /dev/null
-					echo Remove ${NODE} from mgr
-					./zss0 ceph mgr fail ${NODE}
-					echo Remove ${NODE} from mon
-					./zss0 ceph mon remove ${NODE}
+				done
+				;;
+			"rm")
+				for NODE in ${NODES}
+				do
+					echo REMOVE ${NODE} from mgr
+					$0 ceph mgr fail ${NODE}
+					echo REMOVE ${NODE} from mon
+					$0 ceph mon remove ${NODE}
+				done
+				;;
+			"clean")
+				for NODE in ${NODES}
+				do
+					echo CLEAN ${NODE}.mon ${NODE}.mgr
+					cd ${NODEADM}
+					./zss0 exec ${NODE} "
+						sudo rm -rf ~/store/ceph/var/lib/ceph/mon/*
+						sudo rm -rf ~/store/ceph/var/lib/ceph/mgr/*
+						"
+					cd - &> /dev/null
 				done
 				;;
 			*)
@@ -229,7 +243,6 @@ case $1 in
 					cd ${NODEADM}
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
-						./ws zap ${OSDDEVS} ;
 						./ws osds ${OSDDEVS} ;
 						"
 					cd - &> /dev/null
@@ -238,15 +251,43 @@ case $1 in
 			"down")
 				for NODE in ${NODES}
 				do
-					OSDDEVS=${3:-OSDMAP[${NODE}]}
+					OSDDEVS=${3:-${OSDMAP[${NODE}]}}
 					cd ${NODEADM}
 					for OSDDEV in ${OSDDEVS}
 					do
 						echo DOWN ${NODE}.osd ${OSDDEV}
 						./zss0 exec ${NODE} "
 							cd ~/docker-apps/storage/ceph ;
-							./ws osdclean ${OSDDEV} ;
-							./ws osdreset ;
+							./ws osd-down ${OSDDEV} ;
+							"
+					done
+					cd - &> /dev/null
+				done
+				;;
+			"rm")
+				shift
+				IDS=$*
+				for ID in ${IDS}
+				do
+					echo RM osd.${ID}
+					$0 ceph osd down $ID
+					$0 ceph osd out $ID
+					$0 ceph osd crush remove osd.$ID
+					$0 ceph osd rm $ID
+					$0 ceph auth del osd.$ID
+				done
+				;;
+			"clean")
+				for NODE in ${NODES}
+				do
+					OSDDEVS=${3:-${OSDMAP[${NODE}]}}
+					cd ${NODEADM}
+					for OSDDEV in ${OSDDEVS}
+					do
+						echo CLEAN ${NODE}.osd ${OSDDEVS}
+						./zss0 exec ${NODE} "
+							cd ~/docker-apps/storage/ceph ;
+							./ws osd-zap ${OSDDEVS} ;
 							"
 					done
 					cd - &> /dev/null
@@ -259,49 +300,54 @@ case $1 in
 			;;
 		"mds")
 			shift
-			cd ${NODEADM}
 			ACTION=$1
 			NODES=${2:-${MDSNODE}}
 			case ${ACTION} in
 			"up")
+				cd ${NODEADM}
 				for NODE in ${NODES}
 				do
 					echo UP ${NODE}.mds
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
-						./ws mds ${PGNUM} ;
+						./ws mds ${PGNUM}
 						"
 				done
+				cd - &> /dev/null
 				;;
 			"down")
+				cd ${NODEADM}
 				for NODE in ${NODES}
 				do
 					echo DOWN ${NODE}.mds
 					./zss0 exec ${NODE} "
 						cd ~/docker-apps/storage/ceph ;
 						docker stop mds ; docker rm mds ;
-						./ws mdsreset ;
 						"
 				done
+				cd - &> /dev/null
+				;;
+			"rm")
+				$0 ceph tell mon.\* injectargs '--mon-allow-pool-delete=true'
+				$0 ceph mds fail 0
+				$0 ceph fs rm cephfs --yes-i-really-mean-it
+				$0 ceph osd pool delete cephfs_data cephfs_data --yes-i-really-really-mean-it
+				$0 ceph osd pool delete cephfs_metadata cephfs_metadata --yes-i-really-really-mean-it
+				;;
+			"clean")
+				cd ${NODEADM}
+				for NODE in ${NODES}
+				do
+					./zss0 exec ${NODE} "
+						sudo rm -rf ~/store/ceph/var/lib/ceph/mds/*
+						" && break
+				done
+				cd - &> /dev/null
 				;;
 			*)
 				$0 ; exit 1
 				;;
 			esac
-			cd - &> /dev/null
-			;;
-		"mdsclean")
-			shift
-			cd ${NODEADM}
-			NODES=${2:-${MONITORS}}
-			for NODE in ${NODES}
-			do
-				./zss0 exec ${NODE} "
-					cd ~/docker-apps/storage/ceph ;
-					./ws mdsclean ;
-					" && break
-			done
-			cd - &> /dev/null
 			;;
 		"mdsmount")
 			shift
@@ -323,17 +369,6 @@ case $1 in
 				done
 			fi
 			cd - &> /dev/null
-			;;
-		"osdrm")
-			shift
-			IDS=$*
-			for ID in ${IDS}
-			do
-				$0 ceph osd out $ID
-				$0 ceph osd crush remove osd.$ID
-				$0 ceph osd rm $ID
-				$0 ceph auth del osd.$ID
-			done
 			;;
 		"ceph")
 			shift
@@ -379,20 +414,26 @@ EOF
 		echo $(basename $0) "[nodes/mons/monsip]"
 		echo $(basename $0) "[preflight/clean/remons] [nodes]"
 		echo $(basename $0) "network [up/down/status] [nodes]"
-		echo $(basename $0) "[mon/osd/mds] [up/down] [node] [osds]"
-		echo $(basename $0) "osdrm id1 id2 ..."
-		echo $(basename $0) "mdsclean"
+		echo $(basename $0) "mon [up/down/rm/clean] [nodes]"
+		echo $(basename $0) "osd [up/down/clean] [node] [devices...]"
+		echo $(basename $0) "osd rm [device ids...]"
+		echo $(basename $0) "mds [up/down/clean] [nodes]"
+		echo $(basename $0) "mds rm"
+		echo "    up: bring up the role."
+		echo "    down: close the role."
+		echo "    rm: remove the role from cluster."
+		echo "    clean: clean all data of the role."
 		echo $(basename $0) "mdsmount [nodes]"
 		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
 		echo ""
-		echo "Usage:"
+		echo "How to Bootstrap:"
 		echo "1. ./$(basename $0) config ..."
 		echo "2. ./$(basename $0) secret-create"
 		echo "3. ./$(basename $0) network up"
 		echo "4. ./$(basename $0) preflight"
-		echo "5. ./$(basename $0) remons"
-		echo "6. ./$(basename $0) mon up"
+		echo "5. ./$(basename $0) mon up"
+		echo "6. ./$(basename $0) osd clean"
 		echo "7. ./$(basename $0) osd up"
 		echo "8. ./$(basename $0) mds up"
 		echo "9. ./$(basename $0) mdsmount"
