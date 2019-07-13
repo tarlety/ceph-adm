@@ -282,14 +282,11 @@ case $1 in
 				do
 					OSDDEVS=${3:-${OSDMAP[${NODE}]}}
 					cd ${NODEADM}
-					for OSDDEV in ${OSDDEVS}
-					do
-						echo CLEAN ${NODE}.osd ${OSDDEVS}
-						./zss0 exec ${NODE} "
-							cd ~/docker-apps/storage/ceph ;
-							./ws osd-zap ${OSDDEVS} ;
-							"
-					done
+					echo CLEAN ${NODE}.osd ${OSDDEVS}
+					./zss0 exec ${NODE} "
+						cd ~/docker-apps/storage/ceph ;
+						./ws osd-zap ${OSDDEVS} ;
+						"
 					cd - &> /dev/null
 				done
 				;;
