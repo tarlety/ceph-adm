@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.10
+		APPVERSION=0.2.0
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -49,7 +49,7 @@ case $1 in
 			"
 		for ROLE in osd mds rbd rgw
 		do
-			while ./zss0 exec ${SEEDNODE} "[ ! -f ~/store/ceph/var/lib/ceph/bootstrap-${ROLE}/ceph.keyring ]"
+			while ./zss0 exec ${SEEDNODE} "sudo [ ! -f /var/lib/ceph/bootstrap-${ROLE}/ceph.keyring ]"
 			do
 				echo Waiting bootstrap-${ROLE}/ceph.keyring...
 				sleep 1
@@ -57,14 +57,20 @@ case $1 in
 		done
 		cd - &> /dev/null
 
-		./zss0 remons
+		$0 remons
 
 		cd ${NODEADM}
 		./zss0 exec ${SEEDNODE} "
 			cd ~/docker-apps/storage/ceph ;
 			./ws clean ;
-			./ws reconfig-mons ${MONS} ${MONSIP} ;
-			sudo rm -rf ~/store/ceph/var/lib/ceph/mon ;
+			sudo rm -rf /var/lib/ceph/mon ;
+			sudo mkdir -p ~/store/ceph/etc ~/store/ceph/var/lib/ceph ;
+			sudo cp -rf /etc/ceph ~/store/ceph/etc/ ;
+			sudo cp -rf /var/lib/ceph/bootstrap-mds ~/store/ceph/var/lib/ceph ;
+			sudo cp -rf /var/lib/ceph/bootstrap-osd ~/store/ceph/var/lib/ceph ;
+			sudo cp -rf /var/lib/ceph/bootstrap-rbd ~/store/ceph/var/lib/ceph ;
+			sudo cp -rf /var/lib/ceph/bootstrap-rgw ~/store/ceph/var/lib/ceph ;
+			sudo chown -R 64045:64045 ~/store/ceph/var/lib/ceph ;
 			"
 		rm -f ${CEPH_FILE}
 		./zss0 exec ${SEEDNODE} "sudo tar -zcpf - -C ~/store/ceph ." | gpg -ear ${GPGKEY} -o ${CEPH_FILE}
@@ -110,12 +116,17 @@ case $1 in
 				./zss0 exec ${NODE} "sudo mkdir -p ~/store/ceph"
 				gpg -d ${CEPH_FILE} | ./zss0 exec ${NODE} "sudo tar zxpf - -C ~/store/ceph"
 				./zss0 exec ${NODE} "
-					sudo cp -rf ~/store/ceph/etc/ceph/* /etc/ceph ;
-					sudo cp -rf ~/store/ceph/var/lib/ceph/* /etc/ceph ;
-					sudo rm -rf ~/store/ceph
+					sudo cp -rf ~/store/ceph/etc/ceph /etc ;
+					sudo cp -rf ~/store/ceph/var/lib/ceph /var/lib ;
+					sudo mkdir -p /var/log/ceph ;
+					sudo chmod go-rwx /var/log/ceph /var/lib/ceph ;
+					sudo chown 64045:64045 /var/log/ceph /var/lib/ceph ;
+					sudo rm -rf ~/store/ceph ;
+					sudo rmdir ~/store ;
 					"
 			done
 			cd - &> /dev/null
+			$0 remons
 			;;
 		"remons")
 			shift
