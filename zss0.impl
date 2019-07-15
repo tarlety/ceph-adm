@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.1.6
+		APPVERSION=0.1.7
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -31,6 +31,8 @@ case $1 in
 		;;
 	"vars")
 		CEPH_FILE=${SECRET}/ceph.tgz.enc
+		DATA_FILE_PRE=${STORE}/state/${STATENAME}-${APPNAME}
+		DATA_FILE_POST=data.tgz.enc
 		;;
 	"requirement")
 		echo - node-adm: $(${NODEADM}/zss0 version)
@@ -67,10 +69,26 @@ case $1 in
 		cd - &> /dev/null
 		;;
 	"state-data-save")
+		for mon in $($0 env MONITORS)
+		do
+			$0 mon down ${mon}
+			cd ${NODEADM}
+			./zss0 exec ${mon} "sudo tar -zcpf - -C /var/lib/ceph/mon ." | gpg -ear ${GPGKEY} -o ${DATA_FILE_PRE}-${mon}-${DATA_FILE_POST}
+			cd - >& /dev/null
+			$0 mon up $(mon)
+		done
 		;;
 	"state-secret-load-post")
 		;;
 	"state-data-load")
+		for mon in $($0 env MONITORS)
+		do
+			$0 mon down ${mon}
+			cd ${NODEADM}
+			gpg -d ${DATA_FILE_PRE}-${mon}-${DATA_FILE_POST} | gunzip -c - | ./zss0 ssh "sudo tar -C /var/lib/ceph/mon -xf -"
+			cd - >& /dev/null
+			$0 mon up ${mon}
+		done
 		;;
 	# AppImplementing Section: commands
 	#------------------------------------------------------------------------------
