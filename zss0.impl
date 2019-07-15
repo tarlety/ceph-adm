@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.2.1
+		APPVERSION=0.2.2
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -31,8 +31,6 @@ case $1 in
 		;;
 	"vars")
 		CEPH_FILE=${SECRET}/ceph.tgz.enc
-		DATA_FILE_PRE=${STORE}/state/${STATENAME}-${APPNAME}
-		DATA_FILE_POST=data.tgz.enc
 		;;
 	"requirement")
 		echo - node-adm: $(${NODEADM}/zss0 version)
@@ -80,26 +78,53 @@ case $1 in
 		cd - &> /dev/null
 		;;
 	"state-data-save")
+		DATAENC=${STORE}/state/${STATENAME}-${APPNAME}-data.tgz.enc
+		BAKENC=${STORE}/state/${STATENAME}-bak-${APPNAME}-secret.tgz.enc
+		mv -f ${DATAENC} ${BAKENC} &>/dev/null
 		for mon in $($0 env MONITORS)
 		do
-			$0 mon down ${mon}
+			./zss0 mon down ${mon}
 			cd ${NODEADM}
-			./zss0 exec ${mon} "sudo tar -zcpf - -C /var/lib/ceph/mon ." | gpg -ear ${GPGKEY} -o ${DATA_FILE_PRE}-${mon}-${DATA_FILE_POST}
+			./zss0 exec ${mon} "sudo tar -zcpf - -C ~/store/ceph/var/lib/ceph/mon ." | \
+				gpg -ear ${GPGKEY} -o ${STORE}/state/state-data-save-${mon}.tgz.enc
 			cd - >& /dev/null
-			$0 mon up $(mon)
+			./zss0 mon up ${mon}
 		done
+		cd ${STORE}/state
+		tar -zcf - state-data-save-*.tgz.enc | \
+			gpg -ear ${GPGKEY} -o ${DATAENC}
+		rm state-data-save-*.tgz.enc
+		cd - >& /dev/null
 		;;
 	"state-secret-load-post")
 		;;
 	"state-data-load")
+		echo "WARNING: ALWAYS LOAD IN CLUSTER DOWN MODE!"
+		./zss0 mon down
+
+		DATAENC=${STORE}/state/${STATENAME}-${APPNAME}-data.tgz.enc
+		BAKENC=${STORE}/state/${STATENAME}-bak-${APPNAME}-secret.tgz.enc
+		cd ${STORE}/state
+		gpg -d ${DATAENC} | gunzip -c - | tar -x
+		cd - >& /dev/null
+
 		for mon in $($0 env MONITORS)
 		do
-			$0 mon down ${mon}
 			cd ${NODEADM}
-			gpg -d ${DATA_FILE_PRE}-${mon}-${DATA_FILE_POST} | gunzip -c - | ./zss0 ssh "sudo tar -C /var/lib/ceph/mon -xf -"
+			./zss0 exec ${mon} "
+				sudo mv -f /var/lib/ceph/mon /var/lib/ceph/mon-bak ;
+				sudo mv -f /var/lib/ceph/mgr /var/lib/ceph/mgr-bak ;
+				sudo mkdir -p /var/lib/ceph/mon ;
+				"
+			gpg -d ${STORE}/state/state-data-save-${mon}.tgz.enc | \
+				gunzip -c - | ./zss0 exec ${mon} "sudo tar -C /var/lib/ceph/mon -x"
 			cd - >& /dev/null
-			$0 mon up ${mon}
 		done
+
+		cd ${STORE}/state
+		rm state-data-save-*.tgz.enc
+		cd - >& /dev/null
+		echo "WARNING: CHECK RECOVERING STATE, AND RE-UP CLUSTER!"
 		;;
 	# AppImplementing Section: commands
 	#------------------------------------------------------------------------------
