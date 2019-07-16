@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.2.2
+		APPVERSION=0.2.3
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -209,6 +209,7 @@ case $1 in
 					NODEIP=$(grep -P "[\t ]*${NODE}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
 					./zss0 exec-for-all "
 						sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
+						sudo ufw allow from ${NODEIP} port 111,3300,6789,6800:7300 proto tcp to any comment 'ceph-adm' ;
 						"
 					;;
 				"down")
