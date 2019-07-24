@@ -463,6 +463,13 @@ EOF
 				;;
 			esac
 			;;
+		"node-optimize")
+			shift
+			cd ${NODEADM}
+			./zss0 policy optimizer-ceph-kernel-disk apply ;
+			cd - &> /dev/null
+			echo "REBOOT NODES TO TAKE DISK OPTIMIZATION EFFECT."
+			;;
 		esac
 		;;
 	#------------------------------------------------------------------------------
@@ -482,6 +489,7 @@ EOF
 		echo $(basename $0) "mdsmount [nodes]"
 		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
+		echo $(basename $0) "node-optimize [nodes]"
 		echo ""
 		echo "How to Bootstrap:"
 		echo "1. ./$(basename $0) config ..."
