@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.2.3
+		APPVERSION=0.2.4
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -85,7 +85,7 @@ case $1 in
 		do
 			./zss0 mon down ${mon}
 			cd ${NODEADM}
-			./zss0 exec ${mon} "sudo tar -zcpf - -C ~/store/ceph/var/lib/ceph/mon ." | \
+			./zss0 exec ${mon} "sudo tar -zcpf - -C /var/lib/ceph/mon ." | \
 				gpg -ear ${GPGKEY} -o ${STORE}/state/state-data-save-${mon}.tgz.enc
 			cd - >& /dev/null
 			./zss0 mon up ${mon}
@@ -470,6 +470,16 @@ EOF
 			cd - &> /dev/null
 			echo "REBOOT NODES TO TAKE DISK OPTIMIZATION EFFECT."
 			;;
+		"show-config")
+			shift
+			for MON in ${MONITORS}
+			do
+				mkdir -p ${DATA}/config
+				$0 ceph --admin-daemon /var/run/ceph/ceph-mon.${MON}.asok config show | \
+						tee -a ${DATA}/config/$(date +%Y%m%d)-ceph.conf && \
+					break
+			done
+			;;
 		esac
 		;;
 	#------------------------------------------------------------------------------
@@ -489,7 +499,8 @@ EOF
 		echo $(basename $0) "mdsmount [nodes]"
 		echo $(basename $0) "ceph ..."
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
-		echo $(basename $0) "node-optimize [nodes]"
+		echo $(basename $0) "node-optimize"
+		echo $(basename $0) "show-config"
 		echo ""
 		echo "How to Bootstrap:"
 		echo "1. ./$(basename $0) config ..."
