@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.2.4
+		APPVERSION=0.2.5
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -480,6 +480,23 @@ EOF
 					break
 			done
 			;;
+		"add")
+			shift
+			case $1 in
+			"osd")
+				shift
+				NODE=${1:-u3}
+				OSDDEV=${2:-/dev/sdb}
+
+				OSDDEVS=$(echo "${OSDMAP[${NODE}]}" "${OSDDEV}")
+				# remove the node with original osds
+				./zss0 config osdmap "( $(./zss0 env OSDMAP | sed "s/\[\"${NODE}\"\]=\"[^\"]*\"//g") )"
+				# add back the node with correct osds
+				./zss0 config osdmap "( $(./zss0 env OSDMAP) [\"${NODE}\"]=\"${OSDDEVS}\" )"
+				./zss0 osd up ${NODE} ${OSDDEV}
+				;;
+			esac
+			;;
 		esac
 		;;
 	#------------------------------------------------------------------------------
@@ -501,6 +518,7 @@ EOF
 		echo $(basename $0) "kube-secret [up/down] [namespace]"
 		echo $(basename $0) "node-optimize"
 		echo $(basename $0) "show-config"
+		echo $(basename $0) "add [osd] [node] [osddev]"
 		echo ""
 		echo "How to Bootstrap:"
 		echo "1. ./$(basename $0) config ..."
