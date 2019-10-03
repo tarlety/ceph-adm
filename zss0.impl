@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.2.5
+		APPVERSION=0.2.6
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -490,12 +490,19 @@ EOF
 
 				OSDDEVS=$(echo "${OSDMAP[${NODE}]}" "${OSDDEV}")
 				# remove the node with original osds
-				./zss0 config osdmap "( $(./zss0 env OSDMAP | sed "s/\[\"${NODE}\"\]=\"[^\"]*\"//g") )"
+				$0 config osdmap "( $($0 env OSDMAP | sed "s/\[\"${NODE}\"\]=\"[^\"]*\"//g") )"
 				# add back the node with correct osds
-				./zss0 config osdmap "( $(./zss0 env OSDMAP) [\"${NODE}\"]=\"${OSDDEVS}\" )"
-				./zss0 osd up ${NODE} ${OSDDEV}
+				$0 config osdmap "( $($0 env OSDMAP) [\"${NODE}\"]=\"${OSDDEVS}\" )"
+				$0 osd up ${NODE} ${OSDDEV}
 				;;
 			esac
+			;;
+		"wait_for_health")
+			shift
+			while [[ ! $($0 ceph -s | grep 'HEALTH_OK') = *HEALTH_OK* ]]
+			do
+				$0 ceph -s
+			done
 			;;
 		esac
 		;;
@@ -519,6 +526,7 @@ EOF
 		echo $(basename $0) "node-optimize"
 		echo $(basename $0) "show-config"
 		echo $(basename $0) "add [osd] [node] [osddev]"
+		echo $(basename $0) "wait_for_health"
 		echo ""
 		echo "How to Bootstrap:"
 		echo "1. ./$(basename $0) config ..."
