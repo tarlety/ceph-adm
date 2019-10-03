@@ -6,7 +6,7 @@ case $1 in
 	"app")
 		PROJECTNAME=zerus
 		APPNAME=ceph-adm
-		APPVERSION=0.2.6
+		APPVERSION=0.2.7
 		;;
 	"config")
 		CONFIGKEYS="network nodeadm monitors osdmap mdsnode pgnum"
@@ -79,7 +79,7 @@ case $1 in
 		;;
 	"state-data-save")
 		DATAENC=${STORE}/state/${STATENAME}-${APPNAME}-data.tgz.enc
-		BAKENC=${STORE}/state/${STATENAME}-bak-${APPNAME}-secret.tgz.enc
+		BAKENC=${STORE}/state/${STATENAME}-bak-${APPNAME}-data.tgz.enc
 		mv -f ${DATAENC} ${BAKENC} &>/dev/null
 		for mon in $($0 env MONITORS)
 		do
@@ -103,7 +103,7 @@ case $1 in
 		./zss0 mon down
 
 		DATAENC=${STORE}/state/${STATENAME}-${APPNAME}-data.tgz.enc
-		BAKENC=${STORE}/state/${STATENAME}-bak-${APPNAME}-secret.tgz.enc
+		BAKENC=${STORE}/state/${STATENAME}-bak-${APPNAME}-data.tgz.enc
 		cd ${STORE}/state
 		gpg -d ${DATAENC} | gunzip -c - | tar -x
 		cd - >& /dev/null
