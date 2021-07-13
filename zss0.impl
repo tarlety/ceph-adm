@@ -201,16 +201,25 @@ case $1 in
 			shift
 			NODES=${*:-$($0 nodes)}
 
+                        NODEIPS=""
+			for NODE in ${NODES}
+			do
+                            NODEIP=$(grep -P "[\t ]*${NODE}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
+                            NODEIPS="${NODEIPS} ${NODEIP}"
+                        done
+
 			cd ${NODEADM}
 			for NODE in ${NODES}
 			do
 				case ${ONOFF} in
 				"up")
-					NODEIP=$(grep -P "[\t ]*${NODE}( |$)" /etc/hosts | head -1 | cut -d' ' -f1)
-					./zss0 exec-for-all "
-						sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
-						sudo ufw allow from ${NODEIP} port 111,3300,6789,6800:7300 proto tcp to any comment 'ceph-adm' ;
-						"
+                                        for NODEIP in ${NODEIPS}
+                                        do
+                                            ./zss0 exec ${NODE} "
+                                                sudo ufw allow from ${NODEIP} to any proto tcp port 111,3300,6789,6800:7300 comment 'ceph-adm' ;
+                                                sudo ufw allow from ${NODEIP} port 111,3300,6789,6800:7300 proto tcp to any comment 'ceph-adm' ;
+                                                "
+                                        done
 					;;
 				"down")
 					RULENUM=$(./zss0 exec ${NODE} "sudo ufw status numbered | grep ceph-adm | head -1 | cut -d] -f1 | cut -d[ -f2")
